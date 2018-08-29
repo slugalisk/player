@@ -121,7 +121,7 @@ class Client extends EventEmitter {
     this.pc.createOffer()
       .then(offer => {
         this.initialized = true;
-        console.log('initial offer', offer);
+        // console.log('initial offer', offer);
         this.pc.setLocalDescription(offer);
         this.mediator.sendOffer(offer);
       });

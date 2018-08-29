@@ -1,6 +1,3 @@
-/* eslint no-console:0 */
-'use strict';
-
 const http = require('http');
 const express = require('express');
 const ws = require('ws');
@@ -21,6 +18,8 @@ const args = require('minimist')(process.argv.slice(2));
 const port = args.p || 8080;
 
 const app = express();
+app.use(express.static('public'));
+
 const server = http.createServer(app);
 
 server.listen(port, function() {
@@ -28,8 +27,8 @@ server.listen(port, function() {
   console.log('Server running at ' + address.port);
 });
 
-const externalIp = process.env.EXTERNAL_IP || server.address().address;
-const dhtClient = new dht.Client(generateId(externalIp));
+const serverIp = process.env.EXTERNAL_IP || server.address().address;
+const dhtClient = new dht.Client(generateId(serverIp));
 const ppsppClient = new ppspp.Client();
 
 const wss = new ws.Server({server});

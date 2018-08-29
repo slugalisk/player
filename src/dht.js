@@ -35,39 +35,33 @@ class Client extends EventEmitter {
       numberOfNodesPerKBucket: 4,
       localNodeId: this.id,
     });
-    this.seenIds = new LRU({
-      max: 1024,
-      maxAge: 1000 * 60,
-    });
+    this.seenIds = new LRU({max: 1024});
     this.knownRoutes = new LRU({
       max: 1024,
       maxAge: 1000 * 60,
     });
-    this.callbacks = new LRU({
-      max: 1024,
-      maxAge: 1000 * 60,
-    });
+    this.callbacks = new LRU({max: 1024});
 
-    console.log(this.id);
+    // console.log(this.id);
   }
 
   handlePing(channel) {
     // might not be necessary since dropped connections are removed...
-    console.log('handlePing', channel);
+    // console.log('handlePing', channel);
   }
 
   handleRemoved(channel) {
     channel.channel.close();
-    console.log('handleRemoved', channel);
+    // console.log('handleRemoved', channel);
   }
 
   handleUpdated(channel) {
-    console.log('handleUpdated', channel);
+    // console.log('handleUpdated', channel);
   }
 
   handleAdded(channel) {
     // emit event?
-    console.log('handleAdded', channel);
+    // console.log('handleAdded', channel);
   }
 
   addChannel(channel) {
@@ -92,19 +86,19 @@ class Client extends EventEmitter {
   }
 
   handleOpen({channel, id}) {
-    console.log('handleOpen', arrayBufferToHex(id));
+    // console.log('handleOpen', arrayBufferToHex(id));
 
     this.send(id, 'peers.request', this.handlePeersResponse.bind(this));
   }
 
   handleMessage(channel, event) {
-    console.log('handleMessage', event.data);
+    // console.log('handleMessage', event.data);
 
     const req = JSON.parse(event.data);
     const { type, id } = req;
 
     if (this.seenIds.get(id)) {
-      console.log('dropped seen message', id);
+      // console.log('dropped seen message', id);
       return;
     }
     this.seenIds.set(id, true);
@@ -132,7 +126,7 @@ class Client extends EventEmitter {
       if (reqCallback) {
         reqCallback(req, resCallback);
       } else {
-        console.warn('<<< callback for %s expired', req.re);
+        // console.warn('<<< callback for %s expired', req.re);
       }
     } else {
       this.emit(`receive.${type}`, {data: req, callback: resCallback});
@@ -140,7 +134,7 @@ class Client extends EventEmitter {
   }
 
   forwardMessage(to, data) {
-    console.log('forwarding message', arrayBufferToHex(to), data);
+    // console.log('forwarding message', arrayBufferToHex(to), data);
 
     if (data.hops >= MAX_HOPS) {
       return;
@@ -151,17 +145,17 @@ class Client extends EventEmitter {
   }
 
   handleClose({id}) {
-    console.warn('handleClose', arrayBufferToHex(id));
+    // console.warn('handleClose', arrayBufferToHex(id));
     this.channels.remove(id);
     this.candidates.remove(id);
   }
 
   handleError(error) {
-    console.log('error', error);
+    // console.log('error', error);
   }
 
   handlePeersRequest({count=DEFAULT_PEER_REQUEST_COUNT, from}, callback) {
-    console.log('handlePeersRequest');
+    // console.log('handlePeersRequest');
 
     const ids = this.channels.closest(hexToUint8Array(from), count)
       .map(({id}) => arrayBufferToHex(id));
@@ -169,7 +163,7 @@ class Client extends EventEmitter {
   }
 
   handlePeersResponse(res) {
-    console.log('handlePeersResponse', res.ids);
+    // console.log('handlePeersResponse', res.ids);
 
     const ids = res.ids
       .map(id => hexToUint8Array(id))
@@ -179,10 +173,10 @@ class Client extends EventEmitter {
           && !arrayEqual(id, this.id);
       });
 
-    console.log('received peers', ids.map(arrayBufferToHex));
+    // console.log('received peers', ids.map(arrayBufferToHex));
 
     if (ids.length) {
-      this.emit('peers', ids);
+      this.emit('peers.discover', ids);
     }
   }
 
@@ -208,7 +202,7 @@ class Client extends EventEmitter {
       ...data
     });
 
-    console.log('formatMessage', message);
+    // console.log('formatMessage', message);
 
     this.sendRaw(to, message);
   }
@@ -225,14 +219,14 @@ class Client extends EventEmitter {
     }
 
     if (closest.length === 0) {
-      console.warn(`closest value to ${arrayBufferToHex(to)} does not exist`);
+      // console.warn(`closest value to ${arrayBufferToHex(to)} does not exist`);
       return;
     }
 
     if (arrayEqual(closest[0].id, to)) {
       closest = closest.slice(0, 1);
     }
-    console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
+    // console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
     closest.forEach(({channel}) => channel.send(message));
   }
 }
@@ -242,7 +236,7 @@ class Channel {
     this.id = id;
     this.channel = channel;
 
-    console.log('channel', this);
+    // console.log('channel', this);
   }
 }
 
@@ -258,7 +252,7 @@ class SubChannel {
   }
 
   handleMessage({data: {channelId, data}}) {
-    console.log('receive.subchannel.message', channelId, this.id, data)
+    // console.log('receive.subchannel.message', channelId, this.id, data)
 
     if (channelId === this.id) {
       this.onmessage({data});
@@ -277,7 +271,7 @@ class SubChannel {
   }
 
   close() {
-    this.client.off('receive.subchannel.message', this.handleMessage);
+    this.client.removeListener('receive.subchannel.message', this.handleMessage);
   }
 }
 

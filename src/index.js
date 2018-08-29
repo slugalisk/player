@@ -33,7 +33,7 @@ const address = window.location.hostname + ':8080';
 const bootstrap = new WebSocketBootstrap(address);
 
 bootstrap.on('bootstrap', ({data, conn}) => {
-  console.log('bootstrap', data);
+  // console.log('bootstrap', data);
 
   const mediator = new wrtc.Mediator(conn);
   const client = new wrtc.Client(mediator);
@@ -49,7 +49,7 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 
   client.init();
 
-  dhtClient.on('peers', ids => ids.forEach(id => {
+  dhtClient.on('peers.discover', ids => ids.forEach(id => {
     const sub = new dht.SubChannel(dhtClient, id);
     const mediator = new wrtc.Mediator(sub);
     const client = new wrtc.Client(mediator);
@@ -59,14 +59,14 @@ bootstrap.on('bootstrap', ({data, conn}) => {
     dhtClient.addChannel(new dht.Channel(id, client.createDataChannel('dht')));
     ppsppClient.addChannel(new ppspp.Channel(client.createDataChannel('ppspp')));
 
-    dhtClient.send(id, 'connect.request', {subChannelId: sub.id}, () => client.init());
+    dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
   }));
 
-  dhtClient.on('receive.connect.request', ({data: {subChannelId, from}, callback}) => {
-    console.log('receive.connect.request', subChannelId, from);
+  dhtClient.on('receive.connect.request', ({data: {channelId, from}, callback}) => {
+    // console.log('receive.connect.request', channelId, from);
 
     const id = new hexToUint8Array(from);
-    const sub = new dht.SubChannel(dhtClient, id, subChannelId);
+    const sub = new dht.SubChannel(dhtClient, id, channelId);
     const mediator = new wrtc.Mediator(sub);
     const client = new wrtc.Client(mediator);
 
@@ -85,4 +85,3 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 })
 
 ReactDOM.render(<App />, document.getElementById('root'));
-// registerServiceWorker();
