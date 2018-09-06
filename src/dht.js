@@ -6,7 +6,7 @@ const randomBytes = require('randombytes');
 const LRU = require('lru-cache');
 const hexToUint8Array = require('./hexToUint8Array');
 
-const SEND_DUPLICATES = 2;
+const SEND_REPLICAS = 2;
 const MAX_HOPS = 10;
 const DEFAULT_PEER_REQUEST_COUNT = 10;
 
@@ -14,6 +14,7 @@ const DEFAULT_PEER_REQUEST_COUNT = 10;
 // TODO: replace dropped connections
 // TODO: implement get/set
 // TODO: implement connection dump rpc for network debugging
+// TODO: update peers with new peer lists periodically
 
 class Client extends EventEmitter {
   constructor(id) {
@@ -208,7 +209,7 @@ class Client extends EventEmitter {
   }
 
   sendRaw(to, message) {
-    let closest = this.channels.closest(to, SEND_DUPLICATES);
+    let closest = this.channels.closest(to, SEND_REPLICAS);
 
     const knownRoute = this.knownRoutes.get(arrayBufferToHex(to));
     if (knownRoute) {

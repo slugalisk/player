@@ -1,9 +1,15 @@
 const { EventEmitter } = require('events');
 const { Buffer } = require('buffer');
 const hirestime = require('./hirestime');
+const LRU = require('lru-cache');
+const crypto = require('crypto');
+const arrayEqual = require('array-equal');
+const bins = require('./bins');
 
 // const CHUNK_SIZE = 64000;
 // const NCHUNKS_PER_SIG = 16;
+
+const MaxChannelId = 0xffffffff;
 
 const ProtocolOptions = {
   Version: 0,
@@ -217,7 +223,7 @@ class SupportedMessagesProtocolOption {
   }
 
   bitmapByteLength() {
-    return Math.ceil(Math.max(...Object.keys(this.value)) / 8);
+    return Math.ceil(Math.max(...Object.keys(this.value)) / 8) + 1;
   }
 
   toBitmap() {
@@ -240,8 +246,8 @@ class SupportedMessagesProtocolOption {
 
   write(buf, offset) {
     const bitmap = this.toBitmap();
-    buf.writeUint8(bitmap.length, 0);
-    bitmap.copy(buf, 1);
+    buf.writeUint8(bitmap.length, offset);
+    bitmap.copy(buf, offset + 1);
   }
 }
 
@@ -266,13 +272,17 @@ const protocolOptionRecordTypes = {
 };
 
 class HandshakeMessage {
-  constructor(options = []) {
+  constructor(channelId = 0, options = []) {
     this.type = MessageTypes.HANDSHAKE;
+    this.channelId = channelId;
     this.options = options;
   }
 
   read(buf, offset) {
     let length = 0;
+
+    this.channelId = buf.readUint32BE(offset);
+    length += 4;
 
     while (true) {
       const code = buf.readUint8(offset + length);
@@ -293,11 +303,14 @@ class HandshakeMessage {
   }
 
   byteLength() {
-    return this.options.reduce((length, option) => length + option.byteLength() + 1, 0) + 1;
+    return this.options.reduce((length, option) => length + option.byteLength() + 1, 0) + 5;
   }
 
   write(buf, offset) {
     let length = 0;
+
+    buf.writeUint32BE(this.channelId, offset);
+    length += 4;
 
     this.options.forEach(option => {
       buf.writeUint8(option.type, offset + length);
@@ -383,9 +396,9 @@ class DataMessage {
     this.address.write(buf, offset);
     length += this.address.byteLength();
 
-    buf.writeUint32BE(this.timestamp[0], offset + length);
-    length += 4;
     buf.writeUint32BE(this.timestamp[1], offset + length);
+    length += 4;
+    buf.writeUint32BE(this.timestamp[0], offset + length);
     length += 4;
 
     this.data.copy(buf, offset + length);
@@ -531,8 +544,9 @@ const messageRecordTypes = {
 };
 
 class Datagram {
-  constructor(channelId = 0, messages = []) {
-    this.channelId = channelId;
+  constructor(channel=new Channel(), messages = []) {
+    this.channel = channel;
+    this.channelId = channel.localId;
     this.messages = messages;
   }
 
@@ -547,7 +561,10 @@ class Datagram {
       length += 4;
 
       const RecordType = messageRecordTypes[messageType];
+
       const message = new RecordType();
+      message.datagram = this;
+
       this.messages.push(message);
 
       length += message.read(buf, length);
@@ -557,7 +574,7 @@ class Datagram {
   }
 
   byteLength() {
-    return this.messages.reduce((length, message) => message.byteLength() + 1, 0) + 4;
+    return this.messages.reduce((length, message) => length + message.byteLength() + 1, 0) + 4;
   }
 
   write(buf) {
@@ -587,6 +604,149 @@ class Datagram {
   }
 }
 
+class Swarm {
+  constructor(trackers, id, peers = []) {
+    this.trackers = trackers;
+    this.id = id;
+    this.peers = peers;
+    this.chunks = [];
+
+    this.protocolOptions = [
+      new VersionProtocolOption(),
+      new MinimumVersionProtocolOption(),
+      new SwarmIdentifierProtocolOption(),
+      new ContentIntegrityProtectionMethodProtocolOption(),
+      new MerkleHashTreeFunctionProtocolOption(),
+      new LiveSignatureAlgorithmProtocolOption(),
+      new ChunkAddressingMethodProtocolOption(),
+      new LiveDiscardWindowProtocolOption(),
+      new SupportedMessagesProtocolOption(),
+      new ChunkSizeProtocolOption(),
+    ];
+  }
+
+  join(dht) {
+    dht.send(this.id, 'ppspp.peers.request')
+    // bootstrap through dht
+  }
+
+  addPeer(peer) {
+
+  }
+}
+
+class Peer {
+  constructor(swarm, id = Peer.createChannelId()) {
+    this.id = id;
+    this.remoteId = handshake.channelId.value;
+  }
+
+  static createChannelId() {
+    return Math.round(Math.random() * MaxChannelId);
+  }
+
+  onMessage(message) {
+
+  }
+}
+
+class Protocol {
+  constructor(handshake = new HandshakeMessage()) {
+
+  }
+
+  handshakeRequired() {
+    // ...
+  }
+}
+
+class HashTree {
+  constructor(rootDigeets, startChunk, endChunk) {
+    this.startChunk = startChunk;
+    this.endChunk = endChunk;
+
+    this.width = (endChunk - startChunk);
+    this.height = Math.log2(this.width);
+
+    this.chunks = new Array(this.width);
+    this.chunks[this.width / 2] = rootDigeets;
+  }
+
+  insert(index, digest) {
+    this.chunks[index] = digest
+  }
+
+  // TODO: we can probably figure out all the indexes just by storing
+  // whether each value was on the right or left side of its parent...
+  // and we should be able to figure this out in a single loop traversing
+  // up the tree
+  verify(index, value) {
+    index *= 2
+
+    let uncles = new Array(this.height);
+    // let digests = new Array(this.height);
+    let sides = new Array(this.height);
+
+    let left = this.startChunk;
+    let right = this.endChunk;
+
+    for (let i = this.height - 1; i >= 0; i --) {
+      const mid = (left + right) / 2;
+      // digests[i] = mid;
+
+      if (index >= mid) {
+        sides[i] = 1;
+        uncles[i] = Math.floor((left + mid) / 2);
+        left = mid;
+      } else {
+        sides[i] = 0;
+        uncles[i] = Math.floor((right + mid) / 2);
+        right = mid;
+      }
+    }
+
+    let digest = this.hash(value);
+    for (let i = 0; i < this.height; i ++) {
+      if (sides[i] === 1) {
+        digest = this.hash(Buffer.concat(this.chunks[uncles[i]], digest));
+      } else {
+        digest = this.hash(Buffer.concat(digest, this.chunks[uncles[i]]));
+      }
+    }
+
+    return arrayEqual(digest, this.chunks[this.width / 2]);
+  }
+}
+
+class Sha256HashTree extends HashTree {
+  hash(data) {
+    const hash = crypto.createHash('SHA256');
+    hash.update(data);
+    return hash.digest();
+  }
+}
+
+class Data {
+  constructor(protocolOptions, signedIntegrity) {
+    this.protocolOptions = protocolOptions;
+    this.signedIntegrity = signedIntegrity;
+    this.hashes = [];
+    this.data = [];
+  }
+
+  addHash(index, data) {
+    this.hashes[index] = data;
+  }
+
+  addData(index, data) {
+
+  }
+
+  merge(data) {
+
+  }
+}
+
 // class Decoder {
 //   constructor(handshake) {
 //     this.readAddress
@@ -601,13 +761,154 @@ class Datagram {
 //   }
 // }
 
+class Stream extends EventEmitter {
+  constructor(id) {
+    super();
+    this.id = id;
+  }
+
+  close() {
+
+  }
+}
+
+class MemeHub extends EventEmitter {
+  constructor() {
+    super();
+
+    this.swarms = {};
+  }
+
+  join(id) {
+    this.swarms[id] = new swarm(id);
+  }
+
+  part(id) {
+    this.swarm[id].close();
+    delete this.swarm[id];
+  }
+}
+
 class Client {
   constructor() {
     this.channels = [];
+
+    this.memeHub = new MemeHub();
+    this.pendingPeers = new LRU({
+      max: 1024,
+      maxAge: 1000 * 60,
+    });
+  }
+
+  publish(swarm) {
+
   }
 
   addChannel(channel) {
     this.channels.push(channel);
+
+    channel.once('open', () => {
+      Object.values(this.memeHub.swarms).forEach(swarm => {
+
+        const peer = new Peer(swarm);
+        this.pendingPeers.set(peer.id, peer);
+
+        const data = new Datagram(
+          0,
+          [
+            new HandshakeMessage(
+              peer.id,
+              [
+                new VersionProtocolOption(),
+                new MinimumVersionProtocolOption(),
+                new SwarmIdentifierProtocolOption(swarm.id),
+                new LiveDiscardWindowProtocolOption(6000),
+                new SupportedMessagesProtocolOption(SupportedMessageTypes),
+              ]
+            ),
+          ],
+        );
+        channel.channel.send(data.toBuffer());
+      });
+    });
+
+    channel.on('message', message => {
+      switch (message.type) {
+        case MessageTypes.HANDSHAKE:
+          this.handleHandshake(channel, message);
+          break;
+        case MessageTypes.DATA:
+
+          break;
+        case MessageTypes.HAVE:
+
+          break;
+        case MessageTypes.INTEGRITY:
+
+          break;
+        case MessageTypes.SIGNED_INTEGRITY:
+
+          break;
+        case MessageTypes.REQUEST:
+
+          break;
+        case MessageTypes.CANCEL:
+
+          break;
+        case MessageTypes.CHOKE:
+
+          break;
+        case MessageTypes.UNCHOKE:
+
+          break;
+      }
+    });
+  }
+
+  handleHandshake(channel, handshake) {
+    // we sent a handshake and this is the response
+    // - we are already in this swarm
+    // - we are joining this swarm for the first time
+    // we are receiving a handshake request
+    // - we are in this swarm
+    // - we are not in this swarm
+
+
+    const swarmId = handshake.values[ProtocolOptions.SwarmIdentifier].value;
+    const swarm = this.memeHub.swarms[swarmId];
+
+    if (swarm === undefined) {
+      return;
+    }
+
+    const isPeerRequest = handshake.datagram.channelId === 0;
+    const peer = isPeerRequest
+      ? new Peer(swarm)
+      : this.pendingPeers.get(handshake.channelId);
+
+    if (peer === undefined) {
+      return;
+    }
+
+    peer.remoteId = handshake.channelId;
+
+    if (isPeerRequest) {
+      const data = new Datagram(
+        handshake.channelId,
+        [
+          new HandshakeMessage(
+            peer.id,
+            [
+              ...swarm.protocolOptions,
+              new LiveDiscardWindowProtocolOption(6000),
+              new SupportedMessagesProtocolOption(SupportedMessageTypes),
+            ]
+          ),
+        ],
+      );
+      channel.channel.send(data.toBuffer());
+    }
+
   }
 }
 
@@ -624,14 +925,22 @@ class Channel extends EventEmitter {
 
   handleOpen(event) {
     console.log(event);
+
+    const handshake = new Datagram(
+      this.memeHub,
+      [new Handshake(this.memeHub)],
+    );
+    this.channel.send(new Uint8Array(handshake.toBuffer()));
   }
 
-  handleMessage(msg) {
-    console.log(msg)
+  handleMessage(event) {
+    const data = new Datagram(this.memeHub);
+    data.read(event.data);
+    data.messages.forEach(message => this.emit('message', message));
   }
 
   handleClose() {
-    console.log('close');
+    this.emit('close');
   }
 }
 

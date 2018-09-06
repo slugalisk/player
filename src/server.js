@@ -60,7 +60,7 @@ function generateId(addr) {
   );
 
   const id = Buffer.alloc(16);
-  id.writeUInt32LE(prefix);
+  id.writeUInt32BE(prefix);
   crypto.randomFillSync(id, 4);
 
   return new Uint8Array(id);
