@@ -213,7 +213,7 @@ class SupportedMessagesProtocolOption {
     offset += 1;
 
     for (let i = 0; i < length; i ++) {
-      const byte = buf[offset + 1 + i];
+      const byte = buf[offset + i];
       for (let j = 0; j < 8; j ++) {
         this.value[i * 8 + j] = Boolean(byte & (1 << 7 - j));
       }
@@ -601,6 +601,132 @@ class Datagram {
     const buf = Buffer.alloc(this.byteLength());
     this.write(buf);
     return buf;
+  }
+}
+
+class ChunkSet {
+  constructor(size) {
+    this.size = size;
+    this.values = new Array(size);
+    this.hashes = new Array(size * 2 - 1);
+  }
+
+  static from(chunks) {
+    const set = new ChunkSet(chunks.length);
+
+    for (let i = 0; i < set.size; i ++) {
+      set.values[i] = chunks[i];
+      set.hashes[i + set.size - 1] = hashValue(chunks[i]);
+    }
+
+    for (let i = (set.size - 1) * 2; i > 0; i -= 2) {
+      const siblings = [set.hashes[i - 1], set.hashes[i]];
+      set.hashes[Math.floor(i / 2) - 1] = hashValue(Buffer.concat(siblings));
+    }
+
+    return set;
+  }
+
+  insertHash(bin, hash) {
+    if (bin >= this.hashes.length) {
+      throw new Error('hash bin out of range');
+    }
+
+    let left = 0;
+    let right = this.hashes.length - 1;
+    let index = 0;
+    while (true) {
+      const mid = Math.floor((left + right) / 2);
+
+      if (mid === bin) {
+        break;
+      }
+
+      index = (index + 1) * 2;
+      if (mid < bin) {
+        left = mid + 1;
+      } else {
+        right = mid;
+        index --;
+      }
+    }
+
+    this.hashes[index] = hash;
+  }
+
+  insertChunk(bin, value) {
+    const uncles = this.getUncleHashes(bin);
+    const hashes = new Array(uncles.lenght);
+    let hash = hashValue(value);
+
+    for (let i = 0; i < uncles.length; i ++) {
+      const {
+        branch,
+        hash: uncleHash,
+        uncleIndex: index,
+      } = uncles[i];
+
+      hashes[i] = {
+        index,
+        hash,
+      };
+
+      const siblings = branch === 1 ? [hash, uncleHash] : [uncleHash, hash];
+      hash = hashValue(Buffer.concat(siblings));
+    }
+
+    if (!arrayEqual(this.hashes[0], hash)) {
+      throw new Error('invalid hash');
+    }
+
+    hashes.forEach(({index, hash}) => this.hashes[index] = hash);
+    this.values[bin / 2] = value;
+  }
+
+  getChunk(bin) {
+    return this.values[bin / 2];
+  }
+
+  getRootHash() {
+    return this.hashes[0];
+  }
+
+  getUncleHashes(bin) {
+    if (bin >= this.hashes.length) {
+      throw new Error('hash bin out of range');
+    }
+
+    const hashes = [];
+    let index = this.values.length + bin / 2 - 1;
+    let stride = 2;
+    let parent = bin;
+
+    while (index !== 0) {
+      const branch = index % 2 === 1 ? 1 : -1;
+
+      hashes.push({
+        branch,
+        bin: parent + branch * stride,
+        hash: this.hashes[index + branch],
+        uncleIndex: index,
+      });
+
+      index = Math.floor((index - 1) / 2);
+      parent += branch * stride / 2;
+      stride *= 2;
+    }
+
+    return hashes;
+  }
+
+  debug() {
+    for (let i = 0; i < this.values.length; i ++) {
+      console.log(i, this.values[i]);
+    }
+    console.log('---');
+    for (let i = 0; i < this.hashes.length; i ++) {
+      console.log(i, this.hashes[i]);
+    }
   }
 }
 
