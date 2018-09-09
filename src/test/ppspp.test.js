@@ -1,12 +1,75 @@
 // const ppspp = require('./ppspp');
 const crypto = require('crypto');
 const { Buffer } = require('buffer');
-const arrayEqual = require('array-equal');
 
-function hashValue(value) {
-  const hash = crypto.createHash('SHA256');
-  hash.update(value);
-  return hash.digest();
+
+const createProtocol = ({
+  [ProtocolOptions.SwarmIdentifier]: {value: swarmIdentifier},
+  [ProtocolOptions.ContentIntegrityProtectionMethod]: {value: contentIntegrityProtectionMethod},
+  [ProtocolOptions.MerkleHashTreeFunction]: {value: merkleHashTreeFunction},
+  [ProtocolOptions.LiveSignatureAlgorithm]: {value: liveSignatureAlgorithm},
+  [ProtocolOptions.ChunkAddressingMethod]: {value: chunkAddressingMethod},
+  [ProtocolOptions.LiveDiscardWindow]: {value: liveDiscardWindow},
+  [ProtocolOptions.SupportedMessages]: {value: supportedMessages},
+  [ProtocolOptions.ChunkSize]: {value: chunkSize},
+}) => {
+
+  class DataMeme {
+    constructor(size) {
+      this.values = new Array(size);
+    }
+
+    static from(values) {
+      const set = new new DataMeme(values.length);
+      values.forEach((value, i) => set.values[i] = value);
+      return set;
+    }
+
+    set(bin, value) {
+      this.values[bin / 2] = value;
+    }
+
+    get(bin) {
+      return this.values[bin / 2];
+    }
+  }
+
+  // TODO: start/end
+  // TODO: address to bin
+  // TODO: protocol factory to capture protocol options as protocol aspect implementationss
+  class ChunkSet {
+    constructor(size) {
+      this.size = size;
+      this.values = new DataMeme(size);
+      this.verifier = new HashTree(size);
+    }
+
+    static from(chunks) {
+      const set = Object.create(ChunkSet.prototype);
+      set.size = chunks.length;
+      set.values = DataMeme.from(chunks);
+      set.verifier = HashTree.from(chunks);
+
+      return set;
+    }
+
+    setIntegrity(address, integrity) {
+
+    }
+
+    insertChunk(address, data) {
+      this.verifier.verify(bin, value);
+      this.values[bin / 2] = value;
+    }
+
+    getChunk(bin) {
+      return this.values[bin / 2];
+    }
+  }
+
+  return {
+
+  };
 }
 
 function test1() {
