@@ -6,12 +6,13 @@ const ip2location = require('ip2location-nodejs');
 const path = require('path');
 const crypto = require('crypto');
 const arrayBufferToHex = require('array-buffer-to-hex');
+
+require('dotenv').config();
+
 const dht = require('./dht');
 const ppspp = require('./ppspp');
 const wrtc = require('./wrtc');
-const dotenv = require('dotenv');
 
-dotenv.config();
 ip2location.IP2Location_init(path.join(__dirname, 'IP2LOCATION-LITE-DB5.BIN'));
 
 const args = require('minimist')(process.argv.slice(2));

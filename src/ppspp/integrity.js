@@ -1,8 +1,14 @@
 const { Buffer } = require('buffer');
 const arrayEqual = require('array-equal');
-const webcrypto = require('node-webcrypto-ossl');
+const crypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
 
-const createMerkleHashTreeFunction = (MerkleHashTreeFunction) => {
+const {
+  ContentIntegrityProtectionMethod,
+  MerkleHashTreeFunction,
+  LiveSignatureAlgorithm,
+} = require('./constants');
+
+const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
   const algorithms = {
     [MerkleHashTreeFunction.SHA1]: 'SHA-1',
     [MerkleHashTreeFunction.SHA224]: 'SHA-224',
@@ -10,13 +16,13 @@ const createMerkleHashTreeFunction = (MerkleHashTreeFunction) => {
     [MerkleHashTreeFunction.SHA384]: 'SHA-384',
     [MerkleHashTreeFunction.SHA512]: 'SHA-512',
   };
-  const algorithm = algorithms[algorithmSpecifier];
+  const algorithm = algorithms[merkleHashTreeFunction];
 
   if (algorithm === undefined) {
     throw new Error('invalid merkle hash tree function');
   }
 
-  return data => webcrypto.subtle.digest(algorithm, data);
+  return data => crypto.subtle.digest(algorithm, data);
 };
 
 const liveSignatureAlgorithms = {
@@ -38,27 +44,21 @@ const liveSignatureAlgorithms = {
   },
 };
 
-const createLiveSignatureSignFunction = (
-  liveSignatureAlgorithm,
-  privateKey,
-) => {
+const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey) => {
   // generateKey to bootstrap broadcast
   // importKey...? might be needed to initialize shit
 
-  return data => webcrypto.subtle.sign(
+  return data => crypto.subtle.sign(
     liveSignatureAlgorithms[liveSignatureAlgorithm],
     privateKey,
     data,
   );
 };
 
-const createLiveSignatureVerifyFunction = (
-  liveSignatureAlgorithm,
-  publicKey,
-) => {
+const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, publicKey) => {
   // public key from swarm identifier?
 
-  return (signature, data) => webcrypto.subtle.verify(
+  return (signature, data) => crypto.subtle.verify(
     liveSignatureAlgorithms[liveSignatureAlgorithm],
     publicKey,
     signature,
@@ -81,7 +81,7 @@ const createContentIntegrity = (
       const tree = new MerkleHashTree(values.length);
 
       for (let i = 0; i < tree.size; i ++) {
-        tree.hashes[i + tree.size - 1] = MerkleHashTree.hash(chunks[i]);
+        tree.hashes[i + tree.size - 1] = MerkleHashTree.hash(values[i]);
       }
       for (let i = (tree.size - 1) * 2; i > 0; i -= 2) {
         const siblings = [tree.hashes[i - 1], tree.hashes[i]];
@@ -100,6 +100,7 @@ const createContentIntegrity = (
       let right = this.hashes.length - 1;
       let index = 0;
 
+      // eslint-disable-next-line no-constant-condition
       while (true) {
         const mid = Math.floor((left + right) / 2);
 
@@ -194,6 +195,14 @@ const createContentIntegrity = (
     }
   }
 
+  class SignatureVerifier {
+    insert() {}
+
+    verify() {
+      return true;
+    }
+  }
+
   // handle signed integrity
   // ... generate signed integrity
   // handle/generate integrity hashes
@@ -208,6 +217,8 @@ const createContentIntegrity = (
     case ContentIntegrityProtectionMethod.UnifiedMerkleTree:
       MerkleHashTree.hash = createMerkleHashTreeFunction(merkleHashTreeFunction);
       return MerkleHashTree;
+    default:
+      throw new Error('unsupported content integrity protection method');
   }
 };
 

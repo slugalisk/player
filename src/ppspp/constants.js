@@ -1,3 +1,5 @@
+const invert = require('lodash.invert');
+
 const MaxChannelId = 0xffffffff;
 
 const ProtocolOptions = {
@@ -67,18 +69,18 @@ const MessageTypes = {
   PEX_REScert: 13,
 };
 
-const SupportedMessageTypes = [
-  MessageTypes.HANDSHAKE,
-  MessageTypes.DATA,
-  MessageTypes.ACK,
-  MessageTypes.HAVE,
-  MessageTypes.INTEGRITY,
-  MessageTypes.SIGNED_INTEGRITY,
-  MessageTypes.REQUEST,
-  MessageTypes.CANCEL,
-  MessageTypes.CHOKE,
-  MessageTypes.UNCHOKE,
-];
+[
+  ProtocolOptions,
+  Version,
+  ContentIntegrityProtectionMethod,
+  MerkleHashTreeFunction,
+  LiveSignatureAlgorithm,
+  ChunkAddressingMethod,
+  MessageTypes,
+].forEach(enumType => {
+  const names = invert(enumType);
+  enumType.name = value => names[value] || 'UNDEFINED';
+});
 
 module.exports = {
   MaxChannelId,
@@ -90,5 +92,4 @@ module.exports = {
   ChunkAddressingMethod,
   VariableChunkSize,
   MessageTypes,
-  SupportedMessageTypes,
 };

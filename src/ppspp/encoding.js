@@ -113,6 +113,8 @@ const getLiveSignatureByteLength = (liveSignatureAlgorithm, publicKey) => {
       return 64;
     case LiveSignatureAlgorithm.ECDSAP384SHA384:
       return 96;
+    default:
+      throw new Error('unsupported live signature algorithm');
   }
 };
 
@@ -327,6 +329,7 @@ const createEncoding = () => {
       this.channelId = buf.readUint32BE(offset);
       length += 4;
 
+      // eslint-disable-next-line no-constant-condition
       while (true) {
         const code = buf.readUint8(offset + length);
         length += 1;
@@ -587,10 +590,75 @@ const createEncoding = () => {
     [MessageTypes.UNCHOKE]: UnchokeMessage,
   };
 
+  class Messages {
+    constructor(values = []) {
+      this.values = values;
+      this.buf = null;
+      this.offset = 0;
+    }
+
+    static from(values) {
+      if (values instanceof Messages) {
+        return values
+      }
+      if (Array.isArray(values)) {
+        return new Messages(values);
+      }
+      throw new Error('unable to create Messages from unsupported type');
+    }
+
+    next() {
+      if (this.offset >= this.buf.length) {
+        return;
+      }
+
+      const messageType = this.buf.readUint8(this.offset);
+      this.offset += 1;
+
+      const RecordType = messageRecordTypes[messageType];
+      const message = new RecordType();
+      this.values.push(message);
+
+      this.offset += message.read(this.buf, this.offset);
+
+      return message;
+    }
+
+    toArray() {
+      // eslint-disable-next-line no-empty
+      while (this.next()) {}
+      return this.values;
+    }
+
+    read(buf, offset) {
+      this.buf = buf;
+      this.offset = offset;
+      return 0;
+    }
+
+    byteLength() {
+      this.values.reduce((length, message) => length + message.byteLength() + 1, 0);
+    }
+
+    write(buf, offset) {
+      let length = 0;
+
+      this.values.forEach(message => {
+        buf.writeUint8(message.type, offset + length);
+        length += 1;
+
+        message.write(buf, offset + length);
+        length += message.byteLength();
+      });
+
+      return length;
+    }
+  }
+
   class Datagram {
     constructor(channelId = 0, messages = []) {
       this.channelId = channelId;
-      this.messages = messages;
+      this.messages = Messages.from(messages);
     }
 
     read(buf) {
@@ -599,22 +667,13 @@ const createEncoding = () => {
       this.channelId = buf.readUint32BE(0);
       length += 4;
 
-      while (length < buf.length) {
-        const messageType = buf.readUint8(length);
-        length += 1;
-
-        const RecordType = messageRecordTypes[messageType];
-        const message = new RecordType();
-        this.messages.push(message);
-
-        length += message.read(buf, length);
-      }
+      length += this.messages.read(buf, length);
 
       return length;
     }
 
     byteLength() {
-      return this.messages.reduce((length, message) => length + message.byteLength() + 1, 0) + 4;
+      return this.messages.byteLength() + 4;
     }
 
     write(buf) {
@@ -623,16 +682,7 @@ const createEncoding = () => {
       buf.writeUint32BE(this.channelId, 0);
       length += 4;
 
-      this.messages.forEach(message => {
-        buf.writeUint8(message.type, length);
-        length += 1;
-
-        message.write(buf, length);
-        length += message.byteLength();
-      });
-
-      buf.writeUint8(ProtocolOptions.EndOption, length)
-      length += 1;
+      length += this.messages.write(buf, length);
 
       return length;
     }
@@ -698,9 +748,12 @@ const createEncoding = () => {
   };
 };
 
+const readChannelId = buf => buf.readUint32BE(0);
+
 module.exports = {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
   createIntegrityHashFieldType,
   createEncoding,
+  readChannelId,
 };

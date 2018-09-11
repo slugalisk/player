@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import App from './App';
 import { EventEmitter } from 'events';
-
 import ppspp from './ppspp';
 import dht from './dht';
 import wrtc from './wrtc';
@@ -57,7 +56,13 @@ bootstrap.on('bootstrap', ({data, conn}) => {
     client.once('open', () => sub.close());
 
     dhtClient.addChannel(new dht.Channel(id, client.createDataChannel('dht')));
-    ppsppClient.addChannel(new ppspp.Channel(client.createDataChannel('ppspp')));
+    ppsppClient.addChannel(new ppspp.Channel(client.createDataChannel(
+      'ppspp',
+      {
+        ordered: false,
+        protocol: 'ppspp',
+      },
+    )));
 
     dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
   }));

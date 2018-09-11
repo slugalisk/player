@@ -98,9 +98,9 @@ class Client extends EventEmitter {
 
   createDataChannel(label, options = {}) {
     options = {
+      binaryType: 'arraybuffer',
+      ordered: true,
       ...options,
-      ordered: false,
-      maxRetransmits: 10,
     };
 
     const channel = this.pc.createDataChannel(label, options);

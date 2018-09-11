@@ -1,7 +1,7 @@
 const { EventEmitter } = require('events');
 // const { Buffer } = require('buffer');
 // const hirestime = require('../hirestime');
-const LRU = require('lru-cache');
+// const LRU = require('lru-cache');
 // const crypto = require('crypto');
 // const arrayEqual = require('array-equal');
 // const bins = require('../bins');
@@ -10,21 +10,44 @@ const LRU = require('lru-cache');
 // const NCHUNKS_PER_SIG = 16;
 
 const {
+  // createChunkAddressFieldType,
+  // createLiveSignatureFieldType,
+  // createIntegrityHashFieldType,
+  createEncoding,
+} = require('./encoding');
+
+const {
   MaxChannelId,
+  ProtocolOptions,
+  // Version,
+  // ContentIntegrityProtectionMethod,
+  // MerkleHashTreeFunction,
+  // LiveSignatureAlgorithm,
+  // ChunkAddressingMethod,
+  // VariableChunkSize,
   MessageTypes,
+  SupportedMessageTypes,
 } = require('./constants');
 
-class Swarm {
-  constructor() {
+const {
+  createMerkleHashTreeFunction,
+  createLiveSignatureSignFunction,
+  createLiveSignatureVerifyFunction,
+  createContentIntegrity,
+} = require('./integrity');
 
+class Swarm {
+  constructor(encoding = createEncoding()) {
+    this.encoding = encoding;
   }
 }
 
 class Peer {
-  constructor(swarm, channel, id = Peer.createChannelId()) {
+  constructor(swarm, channel, remoteId = 0, localId = Peer.createChannelId()) {
     this.swarm = swarm;
     this.channel = channel;
-    this.id = id;
+    this.remoteId = remoteId;
+    this.localId = localId;
   }
 
   static createChannelId() {
@@ -32,28 +55,29 @@ class Peer {
   }
 
   init() {
-    const data = new Datagram(
-      0,
+    const {encoding} = this.swarm;
+    const data = new encoding.Datagram(
+      this.remoteId,
       [
-        new HandshakeMessage(
-          peer.id,
+        new encoding.HandshakeMessage(
+          this.localId,
           [
-            new VersionProtocolOption(),
-            new MinimumVersionProtocolOption(),
-            new SwarmIdentifierProtocolOption(swarm.id),
-            new LiveDiscardWindowProtocolOption(6000),
-            new SupportedMessagesProtocolOption(SupportedMessageTypes),
+            new encoding.VersionProtocolOption(),
+            new encoding.MinimumVersionProtocolOption(),
+            new encoding.SwarmIdentifierProtocolOption(this.swarm.id),
+            new encoding.LiveDiscardWindowProtocolOption(6000),
+            new encoding.SupportedMessagesProtocolOption(),
           ],
         ),
       ],
     );
-    channel.send(data);
+    this.channel.send(data);
   }
 
   handleMessage(message) {
     switch (message.type) {
       case MessageTypes.HANDSHAKE:
-        this.handleHandshake(channel, message);
+        this.handleHandshake(message);
         break;
       case MessageTypes.DATA:
         console.log('DATA', message);
@@ -82,10 +106,12 @@ class Peer {
       case MessageTypes.UNCHOKE:
         console.log('UNCHOKE', message);
         break;
+      default:
+        throw new Error('unsupported message type');
     }
   }
 
-  handleHandshake(channel, handshake) {
+  handleHandshake(handshake) {
     // we sent a handshake and this is the response
     // - we are already in this swarm
     // - we are joining this swarm for the first time
@@ -95,40 +121,23 @@ class Peer {
 
     // const options = handshake.options.reduce((options, option) => ({...options, [option.type]: option}), {});
 
-    const swarmId = handshake.values[ProtocolOptions.SwarmIdentifier].value;
-    const swarm = this.memeHub.swarms[swarmId];
+    this.remoteId = handshake.channelId;
 
-    if (swarm === undefined) {
-      return;
-    }
-
-    const isPeerRequest = handshake.datagram.channelId === 0;
-    const peer = isPeerRequest
-      ? new Peer(swarm)
-      : this.pendingPeers.get(handshake.channelId);
-
-    if (peer === undefined) {
-      return;
-    }
-
-    peer.remoteId = handshake.channelId;
-
-    if (isPeerRequest) {
-      const data = new Datagram(
-        handshake.channelId,
-        [
-          new HandshakeMessage(
-            peer.id,
-            [
-              ...swarm.protocolOptions,
-              new LiveDiscardWindowProtocolOption(6000),
-              new SupportedMessagesProtocolOption(SupportedMessageTypes),
-            ]
-          ),
-        ],
-      );
-      channel.channel.send(data.toBuffer());
-    }
+    const {encoding} = this.swarm;
+    const data = new encoding.Datagram(
+      this.remoteId,
+      [
+        new encoding.HandshakeMessage(
+          this.localId,
+          [
+            ...this.swarm.protocolOptions,
+            new encoding.LiveDiscardWindowProtocolOption(6000),
+            new encoding.SupportedMessagesProtocolOption(SupportedMessageTypes),
+          ]
+        ),
+      ],
+    );
+    this.channel.send(data);
   }
 }
 
@@ -147,12 +156,12 @@ class Client {
   constructor() {
     this.channels = [];
 
+    this.genericEncoding = createEncoding();
     this.swarms = {};
-    this.peer = {};
   }
 
   publishSwarm(swarm) {
-    this.swarms[swarm.id] = swarm;
+    this.swarms[swarm.id.toString('base64')] = swarm;
   }
 
   addChannel(channel) {
@@ -161,7 +170,7 @@ class Client {
     const peers = {};
 
     channel.once('open', () => {
-      Object.values(this.memeHub.swarms).forEach(swarm => {
+      Object.values(this.swarms).forEach(swarm => {
         const peer = new Peer(swarm, channel);
         peers[peer.id] = peer;
         peer.init();
@@ -172,11 +181,18 @@ class Client {
       Object.values(peers).forEach(peer => peer.close());
     });
 
-    channel.on('data', ({channelId, messages}) => {
-      let peer = peers[channelId];
+    channel.on('data', (event) => {
+      let data = new this.genericEncoding.Datagram();
+      data.read(event.data);
+
+      let peer = peers[data.channelId];
       if (peer === undefined) {
-        const handshake = messages.find(({type}) => type === MessageTypes.HANDSHAKE);
-        if (handshake === undefined) {
+        if (data.channelId !== 0) {
+          return;
+        }
+
+        const handshake = data.messages.next();
+        if (handshake === undefined || handshake.type !== MessageTypes.HANDSHAKE) {
           return;
         }
         const swarmId = handshake.options.find(({type}) => type === ProtocolOptions.SwarmIdentifier);
@@ -190,9 +206,12 @@ class Client {
 
         peer = new Peer(swarm, channel);
         peers[peer.id] = peer;
+      } else {
+        data = new peer.swarm.encoding.Datagram();
+        data.read(event.data);
       }
 
-      messages.forEach(message => peer.handleMessage(message));
+      data.messages.toArray().forEach(message => peer.handleMessage(message));
     });
   }
 }
@@ -208,20 +227,12 @@ class Channel extends EventEmitter {
     this.channel.onerror = err => console.log('channel error:', err);
   }
 
-  handleOpen(event) {
-    console.log(event);
-
-    const handshake = new Datagram(
-      this.memeHub,
-      [new Handshake(this.memeHub)],
-    );
-    this.channel.send(new Uint8Array(handshake.toBuffer()));
+  handleOpen() {
+    this.emit('open');
   }
 
   handleMessage(event) {
-    const data = new Datagram(this.memeHub);
-    data.read(event.data);
-    this.emit('data', data);
+    this.emit('message', event);
   }
 
   handleClose() {
@@ -234,6 +245,7 @@ class Channel extends EventEmitter {
 }
 
 module.exports = {
+  Swarm,
   Client,
   Channel,
 };
