@@ -1,4 +1,5 @@
 const { EventEmitter } = require('events');
+const BitSet = require('../bitset');
 // const { Buffer } = require('buffer');
 // const hirestime = require('../hirestime');
 // const LRU = require('lru-cache');
@@ -10,23 +11,16 @@ const { EventEmitter } = require('events');
 // const NCHUNKS_PER_SIG = 16;
 
 const {
-  // createChunkAddressFieldType,
-  // createLiveSignatureFieldType,
-  // createIntegrityHashFieldType,
+  createChunkAddressFieldType,
+  createLiveSignatureFieldType,
+  createIntegrityHashFieldType,
   createEncoding,
 } = require('./encoding');
 
 const {
   MaxChannelId,
   ProtocolOptions,
-  // Version,
-  // ContentIntegrityProtectionMethod,
-  // MerkleHashTreeFunction,
-  // LiveSignatureAlgorithm,
-  // ChunkAddressingMethod,
-  // VariableChunkSize,
   MessageTypes,
-  SupportedMessageTypes,
 } = require('./constants');
 
 const {
@@ -36,11 +30,61 @@ const {
   createContentIntegrity,
 } = require('./integrity');
 
+class ChunkAvailabilityMap {
+  constructor() {
+    this.liveDiscardWindow = Infinity;
+    this.offset = 0;
+    this.bitset = new BitSet();
+  }
+
+  // TODO: limit value to avoid allocating huge buffers...
+  setLiveDiscardWindow(liveDiscardWindow) {
+    this.liveDiscardWindow = liveDiscardWindow;
+    this.bitset.resize(liveDiscardWindow);
+  }
+}
+
+class ChunkBuffer {
+  constructor() {
+    this.liveDiscardWindow = Infinity;
+  }
+
+  setLiveDiscardWindow(liveDiscardWindow) {
+    this.liveDiscardWindow = liveDiscardWindow;
+  }
+}
+
 class Swarm {
   constructor(encoding = createEncoding()) {
     this.encoding = encoding;
+    this.chunkAvailabilityMap = new ChunkAvailabilityMap();
+    this.chunkBuffer = new ChunkBuffer();
+  }
+
+  setProtocolOptions({
+    [ProtocolOptions.ContentIntegrityProtectionMethod]: contentIntegrityProtectionMethod,
+    [ProtocolOptions.MerkleHashTreeFunction]: merkleHashTreeFunction,
+    [ProtocolOptions.LiveSignatureAlgorithm]: liveSignatureAlgorithm,
+    [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
+    [ProtocolOptions.ChunkSize]: chunkSize,
+  }) {
+    console.log(contentIntegrityProtectionMethod);
+
+    this.encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
+    this.encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
+    this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.publicKey));
+
+    this.contentIntegrity = createContentIntegrity(contentIntegrityProtectionMethod, merkleHashTreeFunction, liveSignatureAlgorithm);
   }
 }
+
+const PeerState = {
+  CONNECTING: 1,
+  AWAITING_HANDSHAKE: 2,
+  READY: 3,
+  CHOKED: 4,
+  DISCONNECTING: 5,
+};
 
 class Peer {
   constructor(swarm, channel, remoteId = 0, localId = Peer.createChannelId()) {
@@ -48,6 +92,21 @@ class Peer {
     this.channel = channel;
     this.remoteId = remoteId;
     this.localId = localId;
+    this.state = PeerState.CONNECTING;
+    this.ChunkAvailabilityMap = new ChunkAvailabilityMap();
+
+    this.handlers = {
+      [MessageTypes.HANDSHAKE]: this.handleHandshake.bind(this),
+      [MessageTypes.DATA]: this.handleData.bind(this),
+      [MessageTypes.HAVE]: this.handleHave.bind(this),
+      [MessageTypes.ACK]: this.handleAck.bind(this),
+      [MessageTypes.INTEGRITY]: this.handleIntegrity.bind(this),
+      [MessageTypes.SIGNED_INTEGRITY]: this.handleSignedIntegrity.bind(this),
+      [MessageTypes.REQUEST]: this.handleRequest.bind(this),
+      [MessageTypes.CANCEL]: this.handleCancel.bind(this),
+      [MessageTypes.CHOKE]: this.handleChoke.bind(this),
+      [MessageTypes.UNCHOKE]: this.handleUnchoke.bind(this),
+    };
   }
 
   static createChannelId() {
@@ -56,62 +115,51 @@ class Peer {
 
   init() {
     const {encoding} = this.swarm;
-    const data = new encoding.Datagram(
-      this.remoteId,
+    const messages = [];
+
+    messages.push(new encoding.HandshakeMessage(
+      this.localId,
       [
-        new encoding.HandshakeMessage(
-          this.localId,
-          [
-            new encoding.VersionProtocolOption(),
-            new encoding.MinimumVersionProtocolOption(),
-            new encoding.SwarmIdentifierProtocolOption(this.swarm.id),
-            new encoding.LiveDiscardWindowProtocolOption(6000),
-            new encoding.SupportedMessagesProtocolOption(),
-          ],
-        ),
+        new encoding.VersionProtocolOption(),
+        new encoding.MinimumVersionProtocolOption(),
+        new encoding.SwarmIdentifierProtocolOption(this.swarm.id),
+        new encoding.LiveDiscardWindowProtocolOption(6000),
+        new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
       ],
-    );
-    this.channel.send(data);
+    ));
+
+    if (this.swarm.hasData()) {
+      messages.push(new encoding.ChokeMessage());
+    }
+
+    this.channel.send(new encoding.Datagram(this.remoteId, messages));
+    this.state = PeerState.AWAITING_HANDSHAKE;
   }
 
   handleMessage(message) {
-    switch (message.type) {
-      case MessageTypes.HANDSHAKE:
-        this.handleHandshake(message);
-        break;
-      case MessageTypes.DATA:
-        console.log('DATA', message);
-        break;
-      case MessageTypes.HAVE:
-        console.log('HAVE', message);
-        break;
-      case MessageTypes.ACK:
-        console.log('ACK', message);
-        break;
-      case MessageTypes.INTEGRITY:
-        console.log('INTEGRITY', message);
-        break;
-      case MessageTypes.SIGNED_INTEGRITY:
-        console.log('SIGNED_INTEGRITY', message);
-        break;
-      case MessageTypes.REQUEST:
-        console.log('REQUEST', message);
-        break;
-      case MessageTypes.CANCEL:
-        console.log('CANCEL', message);
-        break;
-      case MessageTypes.CHOKE:
-        console.log('CHOKE', message);
-        break;
-      case MessageTypes.UNCHOKE:
-        console.log('UNCHOKE', message);
-        break;
-      default:
-        throw new Error('unsupported message type');
+    const handler = this.handlers[message.type];
+    if (handler === undefined) {
+      throw new Error('unsupported message type');
     }
+
+    console.log(MessageTypes.name(message.type), this.remoteId, message);
+    handler(message);
   }
 
   handleHandshake(handshake) {
+    const options = handshake.options.reduce((options, {type, value}) => ({...options, [type]: value}), {});
+    this.swarm.setProtocolOptions(options);
+
+    const liveDiscardWindow = options[ProtocolOptions.LiveDiscardWindow];
+    if (liveDiscardWindow !== undefined) {
+      this.ChunkAvailabilityMap.setLiveDiscardWindow(liveDiscardWindow);
+    }
+
+    if (this.state === PeerState.AWAITING_HANDSHAKE) {
+      // we initialized the connection and were waiting for handshake memes...
+      return;
+    }
+
     // we sent a handshake and this is the response
     // - we are already in this swarm
     // - we are joining this swarm for the first time
@@ -119,7 +167,7 @@ class Peer {
     // - we are in this swarm
     // - we are not in this swarm
 
-    // const options = handshake.options.reduce((options, option) => ({...options, [option.type]: option}), {});
+    //
 
     this.remoteId = handshake.channelId;
 
@@ -132,12 +180,49 @@ class Peer {
           [
             ...this.swarm.protocolOptions,
             new encoding.LiveDiscardWindowProtocolOption(6000),
-            new encoding.SupportedMessagesProtocolOption(SupportedMessageTypes),
+            new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
           ]
         ),
       ],
     );
     this.channel.send(data);
+    this.state = PeerState.READY;
+  }
+
+  handleData(data) {
+
+  }
+
+  handleHave(data) {
+
+  }
+
+  handleAck(data) {
+
+  }
+
+  handleIntegrity(data) {
+
+  }
+
+  handleSignedIntegrity(data) {
+
+  }
+
+  handleRequest(data) {
+
+  }
+
+  handleCancel(data) {
+
+  }
+
+  handleChoke(data) {
+    this.state = PeerState.CHOKED;
+  }
+
+  handleUnchoke(data) {
+    this.state = PeerState.READY;
   }
 }
 
