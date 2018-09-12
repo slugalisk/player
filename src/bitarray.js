@@ -13,8 +13,8 @@ function applyMask(byte, mask, value) {
   return byte & (255 ^ mask);
 }
 
-class BitSet {
-  constructor(size) {
+class BitArray {
+  constructor(size = 0) {
     this.offset = 0;
     this.resize(size);
   }
@@ -33,7 +33,7 @@ class BitSet {
     }
 
     this.offset += distance;
-    this.unsetRange(offset + 1, offset + distance);
+    this.unsafelySetRange(offset + 1, offset + distance, false);
   }
 
   getByteIndex(index) {
@@ -41,13 +41,16 @@ class BitSet {
   }
 
   setRange(start, end, value = true) {
-    if (end < this.offset) {
+    if (end <= this.offset) {
       return;
     }
     start = Math.max(start, this.offset);
 
     this.adjustOffset(end);
+    this.unsafelySetRange(start, end, value);
+  }
 
+  unsafelySetRange(start, end, value = true) {
     if (end - start >= this.size) {
       this.values.fill(value ? 255 : 0);
       return;
@@ -64,7 +67,7 @@ class BitSet {
     }
 
     let startMask = createMask(8 - (start % 8));
-    let endMask = 255 ^ createMask(8 - (end % 8) - 1);
+    let endMask = 255 ^ createMask(8 - (end % 8));
 
     if (startByteIndex === endByteIndex) {
       const mask = startMask & endMask;
@@ -101,7 +104,7 @@ class BitSet {
   }
 
   get(index) {
-    if (index < this.offset || index > this.offset + this.size) {
+    if (index <= this.offset || index > this.offset + this.size) {
       return false;
     }
 
@@ -109,6 +112,16 @@ class BitSet {
     const mask = 1 << (7 - (index % 8));
     return (this.values[byteIndex] & mask) !== 0
   }
+
+  toValueArray() {
+    const values = [];
+    for (let i = 1; i <= this.size; i ++) {
+      if (this.get(this.offset + i)) {
+        values.push(this.offset + i);
+      }
+    }
+    return values;
+  }
 }
 
-module.exports = BitSet;
+module.exports = BitArray;

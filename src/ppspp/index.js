@@ -1,5 +1,5 @@
 const { EventEmitter } = require('events');
-const BitSet = require('../bitset');
+const BitArray = require('../bitarray');
 // const { Buffer } = require('buffer');
 // const hirestime = require('../hirestime');
 // const LRU = require('lru-cache');
@@ -31,22 +31,25 @@ const {
 } = require('./integrity');
 
 class ChunkAvailabilityMap {
-  constructor() {
-    this.liveDiscardWindow = Infinity;
-    this.offset = 0;
-    this.bitset = new BitSet();
+  constructor(liveDiscardWindow) {
+    this.liveDiscardWindow = liveDiscardWindow;
+    this.values = new BitArray(liveDiscardWindow * 2);
   }
 
   // TODO: limit value to avoid allocating huge buffers...
   setLiveDiscardWindow(liveDiscardWindow) {
     this.liveDiscardWindow = liveDiscardWindow;
-    this.bitset.resize(liveDiscardWindow);
+    this.values.resize(liveDiscardWindow * 2);
+  }
+
+  set(bin) {
+
   }
 }
 
 class ChunkBuffer {
   constructor() {
-    this.liveDiscardWindow = Infinity;
+    this.liveDiscardWindow = 0;
   }
 
   setLiveDiscardWindow(liveDiscardWindow) {
@@ -291,11 +294,10 @@ class Client {
 
         peer = new Peer(swarm, channel);
         peers[peer.id] = peer;
-      } else {
-        data = new peer.swarm.encoding.Datagram();
-        data.read(event.data);
       }
 
+      data = new peer.swarm.encoding.Datagram();
+      data.read(event.data);
       data.messages.toArray().forEach(message => peer.handleMessage(message));
     });
   }
@@ -317,7 +319,7 @@ class Channel extends EventEmitter {
   }
 
   handleMessage(event) {
-    this.emit('message', event);
+    this.emit('data', event);
   }
 
   handleClose() {

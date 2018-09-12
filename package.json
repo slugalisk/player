@@ -27,7 +27,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom",
+    "test": "react-scripts test --env=jsdom --watch --verbose",
     "eject": "react-scripts eject",
     "server": "NODE_ENV=development nodemon src/server.js"
   },
