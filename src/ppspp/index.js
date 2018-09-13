@@ -5,7 +5,7 @@ const BitArray = require('../bitarray');
 // const LRU = require('lru-cache');
 // const crypto = require('crypto');
 // const arrayEqual = require('array-equal');
-// const bins = require('../bins');
+const bins = require('./bins');
 
 // const CHUNK_SIZE = 64000;
 // const NCHUNKS_PER_SIG = 16;
@@ -21,6 +21,7 @@ const {
   MaxChannelId,
   ProtocolOptions,
   MessageTypes,
+  ChunkAddressingMethod,
 } = require('./constants');
 
 const {
@@ -30,20 +31,48 @@ const {
   createContentIntegrity,
 } = require('./integrity');
 
-class ChunkAvailabilityMap {
+class Address {
+  constructor(bin, start, end) {
+    this.bin = bin;
+    this.start = start;
+    this.end = end;
+  }
+
+  static from (address) {
+    switch (address.type) {
+      case ChunkAddressingMethod.Bin32: {
+        const [start, end] = bins.bounds(address.value);
+        return new Address(address.value, start, end);
+      }
+      case ChunkAddressingMethod.ChunkRange32: {
+        const {start, end} = address;
+        return new Address((end - start) / 2, start, end);
+      }
+      default:
+        throw new Error('unsupported address type');
+    }
+  }
+
+  getChunkCount() {
+    return this.end - this.start;
+  }
+}
+
+class ChunkMap {
   constructor(liveDiscardWindow) {
     this.liveDiscardWindow = liveDiscardWindow;
     this.values = new BitArray(liveDiscardWindow * 2);
   }
 
-  // TODO: limit value to avoid allocating huge buffers...
+  // TODO: ignore very large discard windows from remote peers...
   setLiveDiscardWindow(liveDiscardWindow) {
     this.liveDiscardWindow = liveDiscardWindow;
     this.values.resize(liveDiscardWindow * 2);
   }
 
   set(bin) {
-
+    const [start, end] = bins.bounds(bin);
+    this.values.setRange(start, end + 1);
   }
 }
 
@@ -60,7 +89,7 @@ class ChunkBuffer {
 class Swarm {
   constructor(encoding = createEncoding()) {
     this.encoding = encoding;
-    this.chunkAvailabilityMap = new ChunkAvailabilityMap();
+    this.availabilityMap = new ChunkMap();
     this.chunkBuffer = new ChunkBuffer();
   }
 
@@ -96,7 +125,7 @@ class Peer {
     this.remoteId = remoteId;
     this.localId = localId;
     this.state = PeerState.CONNECTING;
-    this.ChunkAvailabilityMap = new ChunkAvailabilityMap();
+    this.availableChunks = new ChunkMap();
 
     this.handlers = {
       [MessageTypes.HANDSHAKE]: this.handleHandshake.bind(this),
@@ -155,7 +184,7 @@ class Peer {
 
     const liveDiscardWindow = options[ProtocolOptions.LiveDiscardWindow];
     if (liveDiscardWindow !== undefined) {
-      this.ChunkAvailabilityMap.setLiveDiscardWindow(liveDiscardWindow);
+      this.availableChunks.setLiveDiscardWindow(liveDiscardWindow);
     }
 
     if (this.state === PeerState.AWAITING_HANDSHAKE) {
@@ -169,8 +198,6 @@ class Peer {
     // we are receiving a handshake request
     // - we are in this swarm
     // - we are not in this swarm
-
-    //
 
     this.remoteId = handshake.channelId;
 
@@ -192,39 +219,67 @@ class Peer {
     this.state = PeerState.READY;
   }
 
-  handleData(data) {
+  handleData({address, data}) {
+    this.swarm
 
+    this.swarm.chunks
+
+    const {encoding} = this.swarm;
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.AckMessage(address)],
+    ));
   }
 
-  handleHave(data) {
-
+  handleHave({address}) {
+    this.availableChunks.set(Address.from(address));
+    this.swarm.addAvailableChunk(Address.from(address));
   }
 
-  handleAck(data) {
-
+  handleAck({address}) {
+    this.availableChunks.set(Address.from(address));
+    // perf timing?
+    // clear retransmit timer?
   }
 
-  handleIntegrity(data) {
-
+  handleIntegrity({address, hash}) {
+    this.swarm.contentIntegrity.setHash(Address.from(address), hash);
   }
 
-  handleSignedIntegrity(data) {
-
+  handleSignature({address, signature}) {
+    this.swarm.contentIntegrity.verifyHash(Address.from(address), signature);
   }
 
-  handleRequest(data) {
+  // TODO: throttling (request queue)
+  // TODO: retransmission settings
+  // TODO: save sent time for perf
+  // TODO: push model?
+  handleRequest({address}) {
+    const chunk = this.swarm.chunks.get(Address.from(address));
+    if (chunk === undefined) {
+      return;
+    }
 
+    const {encoding} = this.swarm;
+    const data = new encoding.Datagram(
+      this.remoteId,
+      [
+        ...this.swarm.contentIntegrity.getIntegrityMessages(Address.from(address)),
+        new encoding.DataMessage(address, chunk),
+      ],
+    );
+    this.channel.send(data);
   }
 
-  handleCancel(data) {
-
+  handleCancel({address}) {
+    // TODO: cancel retransmit...
   }
 
-  handleChoke(data) {
+  handleChoke() {
     this.state = PeerState.CHOKED;
   }
 
-  handleUnchoke(data) {
+  handleUnchoke() {
     this.state = PeerState.READY;
   }
 }

@@ -77,12 +77,12 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
 
 const createBufferFieldType = byteLength => {
   class BufferField {
-    constructor(value) {
+    constructor(value = Buffer.alloc(byteLength)) {
       this.value = value;
     }
 
     read(buf, offset) {
-      this.value = buf.slice(offset, offset + byteLength);
+      buf.copy(this.value, 0, offset, offset + byteLength);
       return byteLength;
     }
 
@@ -120,7 +120,15 @@ const getLiveSignatureByteLength = (liveSignatureAlgorithm, publicKey) => {
 
 const createLiveSignatureFieldType = (liveSignatureAlgorithm, publicKey) => {
   const byteLength = getLiveSignatureByteLength(liveSignatureAlgorithm, publicKey);
-  return createBufferFieldType(byteLength);
+
+  class LiveSignatureField extends createBufferFieldType(byteLength) {
+    constructor(value) {
+      super(value);
+      this.type = liveSignatureAlgorithm;
+    }
+  }
+
+  return LiveSignatureField;
 };
 
 const createIntegrityHashFieldType = merkleHashTreeFunction => {
@@ -131,7 +139,16 @@ const createIntegrityHashFieldType = merkleHashTreeFunction => {
     [MerkleHashTreeFunction.SHA384]: 48,
     [MerkleHashTreeFunction.SHA512]: 64,
   };
-  return createBufferFieldType(hashByteLengths[merkleHashTreeFunction]);
+  const byteLength = hashByteLengths[merkleHashTreeFunction];
+
+  class IntegrityHashField extends createBufferFieldType(byteLength) {
+    constructor(value) {
+      super(value);
+      this.type = merkleHashTreeFunction;
+    }
+  }
+
+  return IntegrityHashField;
 };
 
 const createEncoding = () => {
@@ -482,6 +499,7 @@ const createEncoding = () => {
   class IntegrityMessage {
     constructor(address = new ChunkAddress(), hash = new IntegrityHash()) {
       this.type = MessageTypes.INTEGRITY;
+      this.address = address;
       this.hash = hash;
     }
 

@@ -1,6 +1,7 @@
 const { Buffer } = require('buffer');
 const arrayEqual = require('array-equal');
 const crypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
+const binSearch = require('../binSearch');
 
 const {
   ContentIntegrityProtectionMethod,
@@ -69,65 +70,61 @@ const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, publicKey) =>
 const createContentIntegrity = (
   contentIntegrityProtectionMethod,
   merkleHashTreeFunction,
-  liveSignatureAlgorithm,
+  liveSignatureVerifyFunction,
+  liveDiscardWindow,
 ) => {
   class MerkleHashTree {
     constructor(size) {
       this.size = size;
       this.hashes = new Array(size * 2 - 1);
+      this.verifyPromise = Promise.reject();
     }
 
     static from(values) {
       const tree = new MerkleHashTree(values.length);
 
       for (let i = 0; i < tree.size; i ++) {
-        tree.hashes[i + tree.size - 1] = MerkleHashTree.hash(values[i]);
+        tree.hashes[i + tree.size - 1] = merkleHashTreeFunction(values[i]);
       }
       for (let i = (tree.size - 1) * 2; i > 0; i -= 2) {
         const siblings = [tree.hashes[i - 1], tree.hashes[i]];
-        tree.hashes[Math.floor(i / 2) - 1] = MerkleHashTree.hash(Buffer.concat(siblings));
+        tree.hashes[Math.floor(i / 2) - 1] = merkleHashTreeFunction(Buffer.concat(siblings));
       }
 
       return tree;
     }
 
-    insert(bin, hash) {
+    setHash(bin, hash) {
       if (bin >= this.hashes.length) {
         throw new Error('hash bin out of range');
       }
 
-      let left = 0;
-      let right = this.hashes.length - 1;
       let index = 0;
-
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const mid = Math.floor((left + right) / 2);
-
-        if (mid === bin) {
-          break;
-        }
-
-        index = (index + 1) * 2;
-        if (mid < bin) {
-          left = mid + 1;
-        } else {
-          right = mid - 1;
-          index --;
-        }
-      }
+      binSearch(
+        this.hashes.length - 1,
+        i => {
+          if (i !== bin) {
+            index = (index + 1) * 2 - (bin < i ? 1 : 0);
+          }
+          return i - bin;
+        },
+      );
 
       this.hashes[index] = hash;
     }
 
-    verify(bin, value) {
+    verifyChunk(bin, value) {
+      return this.verifyPromise.then(() => this.unsafelyVerifyChunk(bin, value));
+    }
+
+    unsafelyVerifyChunk(bin, value) {
       const uncles = this.getUncles(bin);
       if (uncles === null) {
         return false;
       }
 
       const hashes = new Array(uncles.lenght);
-      let hash = MerkleHashTree.hash(value);
+      let hash = merkleHashTreeFunction(value);
 
       for (let i = 0; i < uncles.length; i ++) {
         const {
@@ -142,7 +139,7 @@ const createContentIntegrity = (
         };
 
         const siblings = branch === 1 ? [hash, uncleHash] : [uncleHash, hash];
-        hash = MerkleHashTree.hash(Buffer.concat(siblings));
+        hash = merkleHashTreeFunction(Buffer.concat(siblings));
       }
 
       if (!arrayEqual(this.hashes[0], hash)) {
@@ -154,8 +151,8 @@ const createContentIntegrity = (
       return true;
     }
 
-    getPeak() {
-      return this.hashes[0];
+    verifyRootHash(signature) {
+      return this.verifyPromise = liveSignatureVerifyFunction(signature, this.hashes[0]);
     }
 
     getUncles(bin) {
@@ -187,26 +184,164 @@ const createContentIntegrity = (
     }
   }
 
-  class NoneVerifier {
-    insert() {}
+  class MerkleHashTreeVerifier {
+    constructor() {
+      this.hashTree = null;
+    }
 
-    verify() {
-      return true;
+    setHash(address, hash) {
+      if (this.hashTree === null) {
+        this.hashTree = new MerkleHashTree(address.getChunkCount());
+      }
+      this.hashTree.setHash(address.bin, hash);
+    }
+
+    verifyHash({bin}, signature) {
+      return this.hashTree === null
+        ? Promise.reject()
+        : this.hashTree.verifyPeakHash(signature);
+    }
+
+    verifyChunk({bin}, value) {
+      return this.hashTree === null
+        ? Promise.reject()
+        : this.hashTree.verifyChunk(bin, value);
+    }
+
+    getIntegrityMessages() {
+      return [];
+    }
+  }
+
+  class MerkleHashSubtree {
+    constructor(start, end) {
+      this.start = start;
+      this.end = end;
+      this.hashTree = new MerkleHashTree(end - start);
+    }
+
+    static from(values, start) {
+      return Object.create(MerkleHashSubtree.prototype, {
+        start,
+        end: start + values.length,
+        hashTree: MerkleHashTree.from(values),
+      });
+    }
+
+    setHash(bin, hash) {
+      this.hashTree.setHash(bin - this.start, hash);
+    }
+
+    verifyChunk(bin, value) {
+      return this.hashTree.verifyChunk(bin - this.start, value);
+    }
+
+    verifyPeakHash(signature) {
+      return this.hashTree.verifyRootHash(signature);
+    }
+
+    getUncles(bin) {
+      return this.hashTree.getUncles(bin - this.start).map((bin, ...rest) => ({
+        ...rest,
+        bin: bin + this.start,
+      }));
+    }
+
+    getChunkCount() {
+      return this.end - this.start;
+    }
+  }
+
+  class UnifiedMerkleHashTreeVerifier {
+    constructor() {
+      this.hashTrees = [];
+      this.chunkCount = 0;
+    }
+
+    findSubtree(bin) {
+      const index = binSearch(
+        this.hashTrees.length - 1,
+        i => {
+          const {start, end} = this.hashTree[i];
+          return start <= bin && bin <= end ? 0 : start - bin;
+        },
+      );
+
+      return index >= 0 ? this.hashTrees[index] : null;
+    }
+
+    createSubtree({start, end}) {
+      const subtree = new MerkleHashSubtree(start, end);
+
+      this.hashTrees.push(subtree);
+      this.hashTrees.sort((a, b) => a.start - b.start);
+
+      this.chunkCount += subtree.getChunkCount();
+      while (this.chunkCount - this.hashTrees[0].getChunkCount() > liveDiscardWindow) {
+        const removedTree = this.hashTrees.shift();
+        this.chunkCount -= removedTree.getChunkCount();
+      }
+
+      return subtree;
+    }
+
+    setHash(address, hash) {
+      const subtree = this.findSubtree(address.bin) || this.createSubtree(address);
+      subtree.setHash(address.bin, hash);
+    }
+
+    verifyHash({bin}, signature) {
+      const subtree = this.findSubtree(bin);
+      return subtree === null
+        ? Promise.reject()
+        : subtree.verifyPeakHash(signature);
+    }
+
+    verifyChunk({bin}, value) {
+      const subtree = this.findSubtree(bin);
+      return subtree === null
+        ? Promise.reject()
+        : subtree.verifyChunk(bin, value);
+    }
+
+    getIntegrityMessages() {
+      return [];
     }
   }
 
   class SignatureVerifier {
-    insert() {}
+    setHash() {}
 
-    verify() {
-      return true;
+    verifyHash() {}
+
+    verifyChunk() {
+      return Promise.resolve();
+    }
+
+    getIntegrityMessages() {
+      return [];
     }
   }
 
-  // handle signed integrity
-  // ... generate signed integrity
-  // handle/generate integrity hashes
-  // verify chunks
+  class NoneVerifier {
+    constructor() {
+      this.promise = Promise.resolve(true);
+    }
+
+    setHash() {}
+
+    verifyHash() {
+      return this.promise;
+    }
+
+    verifyChunk() {
+      return this.promise;
+    }
+
+    getIntegrityMessages() {
+      return [];
+    }
+  }
 
   switch (contentIntegrityProtectionMethod) {
     case ContentIntegrityProtectionMethod.None:
@@ -214,9 +349,9 @@ const createContentIntegrity = (
     case ContentIntegrityProtectionMethod.SignAll:
       return SignatureVerifier;
     case ContentIntegrityProtectionMethod.MerkleHashTree:
+      return MerkleHashTreeVerifier;
     case ContentIntegrityProtectionMethod.UnifiedMerkleTree:
-      MerkleHashTree.hash = createMerkleHashTreeFunction(merkleHashTreeFunction);
-      return MerkleHashTree;
+      return UnifiedMerkleHashTreeVerifier;
     default:
       throw new Error('unsupported content integrity protection method');
   }
