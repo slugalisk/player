@@ -37,10 +37,12 @@ const liveSignatureAlgorithms = {
   },
   [LiveSignatureAlgorithm.ECDSAP256SHA256]: {
     name: 'ECDSA',
+    namedCurve: 'P-256',
     hash: {name: 'SHA-256'},
   },
   [LiveSignatureAlgorithm.ECDSAP384SHA384]: {
     name: 'ECDSA',
+    namedCurve: 'P-384',
     hash: {name: 'SHA-384'},
   },
 };
@@ -73,25 +75,33 @@ const createContentIntegrity = (
   liveSignatureVerifyFunction,
   liveDiscardWindow,
 ) => {
+  // TODO: only modify hash trees after verifying new values
+  //  - supplement hashes from message with verified hashes from tree
+  //  - verify chunk (save generated hashes)
+  //  - merge successfully verified hashes
+  //  - send ack
+
+  const unverifiedTreePromise = Promise.reject('merkle hash tree has unverified root hash');
+  // eat uncaught rejection exception
+  unverifiedTreePromise.catch(() => {});
+
   class MerkleHashTree {
-    constructor(size) {
+    constructor(size, hashes = new Array(size * 2 -1)) {
       this.size = size;
-      this.hashes = new Array(size * 2 - 1);
-      this.verifyPromise = Promise.reject();
+      this.hashes = hashes;
+      this.verifyPromise = unverifiedTreePromise;
     }
 
-    static from(values) {
-      const tree = new MerkleHashTree(values.length);
-
-      for (let i = 0; i < tree.size; i ++) {
-        tree.hashes[i + tree.size - 1] = merkleHashTreeFunction(values[i]);
+    static async from(values) {
+      const hashes = new Array(values.length * 2 -1);
+      for (let i = 0; i < values.length; i ++) {
+        hashes[i + values.length - 1] = merkleHashTreeFunction(values[i]);
       }
-      for (let i = (tree.size - 1) * 2; i > 0; i -= 2) {
-        const siblings = [tree.hashes[i - 1], tree.hashes[i]];
-        tree.hashes[Math.floor(i / 2) - 1] = merkleHashTreeFunction(Buffer.concat(siblings));
+      for (let i = (values.length - 1) * 2; i > 0; i -= 2) {
+        hashes[Math.floor(i / 2) - 1] = Promise.all([hashes[i - 1], hashes[i]])
+          .then(siblings => merkleHashTreeFunction(new Uint8Array(siblings)));
       }
-
-      return tree;
+      return new MerkleHashTree(values.length, await Promise.all(hashes));
     }
 
     setHash(bin, hash) {
@@ -214,18 +224,18 @@ const createContentIntegrity = (
   }
 
   class MerkleHashSubtree {
-    constructor(start, end) {
+    constructor(start, end, hashTree = new MerkleHashTree(end - start)) {
       this.start = start;
       this.end = end;
-      this.hashTree = new MerkleHashTree(end - start);
+      this.hashTree = hashTree;
     }
 
-    static from(values, start) {
-      return Object.create(MerkleHashSubtree.prototype, {
+    static async from(values, start) {
+      return new MerkleHashSubtree(
         start,
-        end: start + values.length,
-        hashTree: MerkleHashTree.from(values),
-      });
+        start + values.length,
+        await MerkleHashTree.from(values),
+      );
     }
 
     setHash(bin, hash) {
@@ -270,8 +280,10 @@ const createContentIntegrity = (
       return index >= 0 ? this.hashTrees[index] : null;
     }
 
-    createSubtree({start, end}) {
-      const subtree = new MerkleHashSubtree(start, end);
+    async createSubtree({start, end}, values = null) {
+      const subtree = values === null
+        ? new MerkleHashSubtree(start, end)
+        : await MerkleHashSubtree.from(values, start);
 
       this.hashTrees.push(subtree);
       this.hashTrees.sort((a, b) => a.start - b.start);
@@ -309,23 +321,9 @@ const createContentIntegrity = (
     }
   }
 
-  class SignatureVerifier {
-    setHash() {}
-
-    verifyHash() {}
-
-    verifyChunk() {
-      return Promise.resolve();
-    }
-
-    getIntegrityMessages() {
-      return [];
-    }
-  }
-
   class NoneVerifier {
     constructor() {
-      this.promise = Promise.resolve(true);
+      this.promise = Promise.resolve();
     }
 
     setHash() {}
@@ -343,11 +341,10 @@ const createContentIntegrity = (
     }
   }
 
+  // TODO: sign all method
   switch (contentIntegrityProtectionMethod) {
     case ContentIntegrityProtectionMethod.None:
       return NoneVerifier;
-    case ContentIntegrityProtectionMethod.SignAll:
-      return SignatureVerifier;
     case ContentIntegrityProtectionMethod.MerkleHashTree:
       return MerkleHashTreeVerifier;
     case ContentIntegrityProtectionMethod.UnifiedMerkleTree:

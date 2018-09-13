@@ -5,7 +5,7 @@ const BitArray = require('../bitarray');
 // const LRU = require('lru-cache');
 // const crypto = require('crypto');
 // const arrayEqual = require('array-equal');
-const bins = require('./bins');
+const Address = require('./address');
 
 // const CHUNK_SIZE = 64000;
 // const NCHUNKS_PER_SIG = 16;
@@ -21,42 +21,15 @@ const {
   MaxChannelId,
   ProtocolOptions,
   MessageTypes,
-  ChunkAddressingMethod,
+  // ChunkAddressingMethod,
 } = require('./constants');
 
 const {
-  createMerkleHashTreeFunction,
-  createLiveSignatureSignFunction,
-  createLiveSignatureVerifyFunction,
+  // createMerkleHashTreeFunction,
+  // createLiveSignatureSignFunction,
+  // createLiveSignatureVerifyFunction,
   createContentIntegrity,
 } = require('./integrity');
-
-class Address {
-  constructor(bin, start, end) {
-    this.bin = bin;
-    this.start = start;
-    this.end = end;
-  }
-
-  static from (address) {
-    switch (address.type) {
-      case ChunkAddressingMethod.Bin32: {
-        const [start, end] = bins.bounds(address.value);
-        return new Address(address.value, start, end);
-      }
-      case ChunkAddressingMethod.ChunkRange32: {
-        const {start, end} = address;
-        return new Address((end - start) / 2, start, end);
-      }
-      default:
-        throw new Error('unsupported address type');
-    }
-  }
-
-  getChunkCount() {
-    return this.end - this.start;
-  }
-}
 
 class ChunkMap {
   constructor(liveDiscardWindow) {
@@ -70,8 +43,7 @@ class ChunkMap {
     this.values.resize(liveDiscardWindow * 2);
   }
 
-  set(bin) {
-    const [start, end] = bins.bounds(bin);
+  set({start, end}) {
     this.values.setRange(start, end + 1);
   }
 }

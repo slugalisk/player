@@ -1,6 +1,6 @@
 const { Buffer } = require('buffer');
 const hirestime = require('../hirestime');
-const bins = require('./bins');
+const { binBounds } = require('./address');
 
 const {
   ProtocolOptions,
@@ -33,7 +33,7 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
     }
 
     rangeByteLength() {
-      const [start, end] = bins.bounds(this.value);
+      const [start, end] = binBounds(this.value);
       return (end - start) * chunkSize;
     }
   }
@@ -425,8 +425,9 @@ const createEncoding = () => {
       let length = this.address.read(buf, offset);
       length += this.timestamp.read(buf, offset + length);
 
-      const dataLength = this.address.rangeByteLength();
-      this.data = buf.slice(offset + length, offset + length + dataLength);
+      offset += length;
+      const dataLength = Math.min(this.address.rangeByteLength(), buf.length - offset);
+      this.data = buf.slice(offset, offset + dataLength);
 
       return length + dataLength;
     }
