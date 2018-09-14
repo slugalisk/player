@@ -1,8 +1,8 @@
 /* globals it expect */
 
-import integrity from './integrity';
-import crypto from 'crypto';
-import Address from './address';
+const integrity = require('./integrity');
+const crypto = require('crypto');
+const Address = require('./address');
 
 const webcrypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
 
@@ -22,13 +22,13 @@ it ('search', async () => {
     ['sign', 'verify'],
   )
 
-  // const liveSignatureSignFunction = integrity.createLiveSignatureSignFunction(
-  //   LiveSignatureAlgorithm.RSASHA256,
-  //   privateKey,
-  // );
+  const liveSignatureSignFunction = integrity.createLiveSignatureSignFunction(
+    LiveSignatureAlgorithm.ECDSAP256SHA256,
+    privateKey,
+  );
 
   const liveSignatureVerifyFunction = integrity.createLiveSignatureVerifyFunction(
-    LiveSignatureAlgorithm.RSASHA256,
+    LiveSignatureAlgorithm.ECDSAP256SHA256,
     publicKey,
   );
 
@@ -36,14 +36,12 @@ it ('search', async () => {
     MerkleHashTreeFunction.SHA256,
   );
 
-  const VerifierType = integrity.createContentIntegrity(
+  const verifierFactory = integrity.createContentIntegrityVerifierFactory(
     ContentIntegrityProtectionMethod.UnifiedMerkleTree,
     merkleHashTreeFunction,
     liveSignatureVerifyFunction,
-    Infinity,
+    liveSignatureSignFunction,
   );
-
-  const verifier = new VerifierType();
 
   const data = Buffer.alloc(1.25 * 1024 * 1024);
   crypto.randomFillSync(data);
@@ -55,6 +53,14 @@ it ('search', async () => {
     chunks[i] = data.slice(i * chunkSize, i * chunkSize + chunkSize);
   }
 
-  const subtree = await verifier.createSubtree(new Address(15), chunks);
+  const subtree = await verifierFactory.createSubtree(new Address(15), chunks);
   console.log(subtree);
+
+  const verifier = subtree.createVerifier();
+  console.log(verifier);
+
+  const bin = 14;
+  return verifier.verifyChunk(bin, chunks[bin / 2])
+    .then(() => console.log('success'))
+    .catch(e => console.log('error', e));
 });

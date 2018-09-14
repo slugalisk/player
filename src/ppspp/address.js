@@ -1,9 +1,9 @@
 const { ChunkAddressingMethod } = require('./constants');
 
 class Address {
-  constructor(bin = 0, bounds = Address.binBounds(bin)) {
+  constructor(bin = 0, treeBounds = Address.binBounds(bin)) {
     this.bin = bin;
-    [this.start, this.end] = bounds;
+    [this.start, this.end] = treeBounds;
   }
 
   getChunkCount() {

@@ -25,10 +25,10 @@ const {
 } = require('./constants');
 
 const {
-  // createMerkleHashTreeFunction,
-  // createLiveSignatureSignFunction,
-  // createLiveSignatureVerifyFunction,
-  createContentIntegrity,
+  createMerkleHashTreeFunction,
+  createLiveSignatureSignFunction,
+  createLiveSignatureVerifyFunction,
+  createContentIntegrityVerifierFactory,
 } = require('./integrity');
 
 class ChunkMap {
@@ -78,7 +78,7 @@ class Swarm {
     this.encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
     this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.publicKey));
 
-    this.contentIntegrity = createContentIntegrity(contentIntegrityProtectionMethod, merkleHashTreeFunction, liveSignatureAlgorithm);
+    this.contentIntegrity = createContentIntegrityVerifierFactory(contentIntegrityProtectionMethod, merkleHashTreeFunction, liveSignatureAlgorithm);
   }
 }
 

@@ -1,3 +1,3 @@
-import WebCrypto from 'node-webcrypto-ossl';
+const WebCrypto = require('node-webcrypto-ossl');
 
 module.exports = new WebCrypto();
