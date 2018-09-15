@@ -53,14 +53,18 @@ it ('search', async () => {
     chunks[i] = data.slice(i * chunkSize, i * chunkSize + chunkSize);
   }
 
-  const subtree = await verifierFactory.createSubtree(new Address(15), chunks);
-  console.log(subtree);
+  await verifierFactory.appendSubtree(chunks);
+  await verifierFactory.appendSubtree(chunks);
 
-  const verifier = subtree.createVerifier();
+  console.log(verifierFactory.hashTree);
+
+  const bin = 4;
+
+  const verifier = verifierFactory.createVerifier(new Address(bin + 32));
   console.log(verifier);
 
-  const bin = 14;
-  return verifier.verifyChunk(bin, chunks[bin / 2])
+
+  return verifier.verifyChunk(new Address(bin + 32), chunks[bin / 2])
     .then(() => console.log('success'))
     .catch(e => console.log('error', e));
 });

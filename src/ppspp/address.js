@@ -6,6 +6,10 @@ class Address {
     [this.start, this.end] = treeBounds;
   }
 
+  containsBin(bin) {
+    return this.start <= bin && bin <= this.end;
+  }
+
   getChunkCount() {
     return (this.end - this.start) / 2 + 1;
   }
