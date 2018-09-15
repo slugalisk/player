@@ -63,6 +63,7 @@ class Swarm {
     this.encoding = encoding;
     this.availabilityMap = new ChunkMap();
     this.chunkBuffer = new ChunkBuffer();
+    this.contentIntegrity = null;
   }
 
   setProtocolOptions({
@@ -72,13 +73,15 @@ class Swarm {
     [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
     [ProtocolOptions.ChunkSize]: chunkSize,
   }) {
-    console.log(contentIntegrityProtectionMethod);
-
     this.encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
     this.encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
     this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.publicKey));
 
-    this.contentIntegrity = createContentIntegrityVerifierFactory(contentIntegrityProtectionMethod, merkleHashTreeFunction, liveSignatureAlgorithm);
+    this.contentIntegrity = createContentIntegrityVerifierFactory(
+      contentIntegrityProtectionMethod,
+      createMerkleHashTreeFunction(merkleHashTreeFunction),
+      createLiveSignatureVerifyFunction(liveSignatureAlgorithm, this.publicKey),
+    );
   }
 }
 
@@ -98,18 +101,19 @@ class Peer {
     this.localId = localId;
     this.state = PeerState.CONNECTING;
     this.availableChunks = new ChunkMap();
+    this.integrityVerifier = null;
 
     this.handlers = {
-      [MessageTypes.HANDSHAKE]: this.handleHandshake.bind(this),
-      [MessageTypes.DATA]: this.handleData.bind(this),
-      [MessageTypes.HAVE]: this.handleHave.bind(this),
-      [MessageTypes.ACK]: this.handleAck.bind(this),
-      [MessageTypes.INTEGRITY]: this.handleIntegrity.bind(this),
-      [MessageTypes.SIGNED_INTEGRITY]: this.handleSignedIntegrity.bind(this),
-      [MessageTypes.REQUEST]: this.handleRequest.bind(this),
-      [MessageTypes.CANCEL]: this.handleCancel.bind(this),
-      [MessageTypes.CHOKE]: this.handleChoke.bind(this),
-      [MessageTypes.UNCHOKE]: this.handleUnchoke.bind(this),
+      [MessageTypes.HANDSHAKE]: this.handleHandshakeMessage.bind(this),
+      [MessageTypes.DATA]: this.handleDataMessage.bind(this),
+      [MessageTypes.HAVE]: this.handleHaveMessage.bind(this),
+      [MessageTypes.ACK]: this.handleAckMessage.bind(this),
+      [MessageTypes.INTEGRITY]: this.handleIntegrityMessage.bind(this),
+      [MessageTypes.SIGNED_INTEGRITY]: this.handleSignedIntegrityMessage.bind(this),
+      [MessageTypes.REQUEST]: this.handleRequestMessage.bind(this),
+      [MessageTypes.CANCEL]: this.handleCancelMessage.bind(this),
+      [MessageTypes.CHOKE]: this.handleChokeMessage.bind(this),
+      [MessageTypes.UNCHOKE]: this.handleUnchokeMessage.bind(this),
     };
   }
 
@@ -140,6 +144,18 @@ class Peer {
     this.state = PeerState.AWAITING_HANDSHAKE;
   }
 
+  getContentIntegrityVerifier() {
+    if (this.integrityVerifier === null) {
+      this.swarm.contentIntegrity.createVerifier();
+    }
+    return this.integrityVerifier;
+  }
+
+  handleData(data) {
+    data.messages.toArray().forEach(message => this.handleMessage(message));
+    this.integrityVerifier = null;
+  }
+
   handleMessage(message) {
     const handler = this.handlers[message.type];
     if (handler === undefined) {
@@ -150,7 +166,7 @@ class Peer {
     handler(message);
   }
 
-  handleHandshake(handshake) {
+  handleHandshakeMessage(handshake) {
     const options = handshake.options.reduce((options, {type, value}) => ({...options, [type]: value}), {});
     this.swarm.setProtocolOptions(options);
 
@@ -191,81 +207,91 @@ class Peer {
     this.state = PeerState.READY;
   }
 
-  handleData({address, data}) {
-    this.swarm
+  handleDataMessage({address, data}) {
+    this.getContentIntegrityVerifier().verifyChunk(data)
+      .then(() => {
+        this.swarm.chunkBuffer.insert(data);
 
-    this.swarm.chunks
-
-    const {encoding} = this.swarm;
-    this.channel.send(new encoding.Datagram(
-      this.remoteId,
-      [new encoding.AckMessage(address)],
-    ));
+        const {encoding} = this.swarm;
+        this.channel.send(new encoding.Datagram(
+          this.remoteId,
+          [new encoding.AckMessage(address)],
+        ));
+      })
+      .catch(() => {
+        // TODO: update reputation
+      });
   }
 
-  handleHave({address}) {
+  handleHaveMessage({address}) {
     this.availableChunks.set(Address.from(address));
     this.swarm.addAvailableChunk(Address.from(address));
   }
 
-  handleAck({address}) {
+  handleAckMessage({address}) {
     this.availableChunks.set(Address.from(address));
     // perf timing?
     // clear retransmit timer?
   }
 
-  handleIntegrity({address, hash}) {
-    this.swarm.contentIntegrity.setHash(Address.from(address), hash);
+  handleIntegrityMessage({address, hash}) {
+    this.getContentIntegrityVerifier().setHash(Address.from(address), hash);
   }
 
-  handleSignature({address, signature}) {
-    this.swarm.contentIntegrity.verifyHash(Address.from(address), signature);
+  handleSignatureMessage({address, signature}) {
+    this.getContentIntegrityVerifier().setHashSignature(Address.from(address), signature);
   }
 
-  // TODO: throttling (request queue)
+  // TODO: throttling (request queue/prioritization)
   // TODO: retransmission settings
   // TODO: save sent time for perf
   // TODO: push model?
-  handleRequest({address}) {
+  handleRequestMessage({address}) {
     const chunk = this.swarm.chunks.get(Address.from(address));
     if (chunk === undefined) {
       return;
     }
 
     const {encoding} = this.swarm;
-    const data = new encoding.Datagram(
-      this.remoteId,
-      [
-        ...this.swarm.contentIntegrity.getIntegrityMessages(Address.from(address)),
-        new encoding.DataMessage(address, chunk),
-      ],
-    );
-    this.channel.send(data);
+    const messages = [];
+
+    // TODO: omit signatures for bins the peer has already acked
+    this.swarm.contentIntegrity.getConstituentSignatures(Address.from(address))
+      .reverse()
+      .forEach(({bin, signature}, i) => {
+        const address = encoding.ChunkAddress.from(new Address(bin));
+
+        messages.push(new encoding.IntegrityMessage(
+          address,
+          new encoding.IntegrityHash(signature.getHash()),
+        ));
+
+        if (i === 0) {
+          messages.push(new encoding.SignedIntegrityMessage(
+            address,
+            new encoding.Timestamp(),
+            new encoding.LiveSignature(signature.getSignatureHash()),
+          ));
+        }
+      });
+
+    messages.push(new encoding.DataMessage(address, chunk));
+
+    this.channel.send(new encoding.Datagram(this.remoteId, messages));
   }
 
-  handleCancel({address}) {
+  handleCancelMessage({address}) {
     // TODO: cancel retransmit...
   }
 
-  handleChoke() {
+  handleChokeMessage() {
     this.state = PeerState.CHOKED;
   }
 
-  handleUnchoke() {
+  handleUnchokeMessage() {
     this.state = PeerState.READY;
   }
 }
-
-// class Stream extends EventEmitter {
-//   constructor(id) {
-//     super();
-//     this.id = id;
-//   }
-
-//   close() {
-
-//   }
-// }
 
 class Client {
   constructor() {
@@ -325,7 +351,7 @@ class Client {
 
       data = new peer.swarm.encoding.Datagram();
       data.read(event.data);
-      data.messages.toArray().forEach(message => peer.handleMessage(message));
+      peer.handleData(data);
     });
   }
 }

@@ -12,36 +12,29 @@ const {
 
 const toUint8Array = data => new Uint8Array(data);
 
-const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
-  const algorithms = {
-    [MerkleHashTreeFunction.SHA1]: {
-      name: 'SHA-1',
-      byteLength: 20,
-    },
-    [MerkleHashTreeFunction.SHA224]: {
-      name: 'SHA-224',
-      byteLength: 28,
-    },
-    [MerkleHashTreeFunction.SHA256]: {
-      name: 'SHA-256',
-      byteLength: 32,
-    },
-    [MerkleHashTreeFunction.SHA384]: {
-      name: 'SHA-384',
-      byteLength: 48,
-    },
-    [MerkleHashTreeFunction.SHA512]: {
-      name: 'SHA-512',
-      byteLength: 64,
-    },
-  };
-  const algorithm = algorithms[merkleHashTreeFunction];
+const MerkleHashTreeFunctionAlgorithms = {
+  [MerkleHashTreeFunction.SHA1]: 'SHA-1',
+  [MerkleHashTreeFunction.SHA224]: 'SHA-224',
+  [MerkleHashTreeFunction.SHA256]: 'SHA-256',
+  [MerkleHashTreeFunction.SHA384]: 'SHA-384',
+  [MerkleHashTreeFunction.SHA512]: 'SHA-512',
+};
 
+const MerkleHashTreeFunctionByteLengths = {
+  [MerkleHashTreeFunction.SHA1]: 20,
+  [MerkleHashTreeFunction.SHA224]: 28,
+  [MerkleHashTreeFunction.SHA256]: 32,
+  [MerkleHashTreeFunction.SHA384]: 48,
+  [MerkleHashTreeFunction.SHA512]: 64,
+};
+
+const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
+  const algorithm = MerkleHashTreeFunctionAlgorithms[merkleHashTreeFunction];
   if (algorithm === undefined) {
     throw new Error('invalid merkle hash tree function');
   }
 
-  const nullHash = new Uint8Array(algorithm.byteLength);
+  const nullHash = new Uint8Array(MerkleHashTreeFunctionByteLengths[merkleHashTreeFunction]);
 
   return (...values) => {
     values = values.map(value => value === undefined ? nullHash : value);
@@ -56,11 +49,11 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
       values = values[0];
     }
 
-    return crypto.subtle.digest(algorithm.name, values).then(toUint8Array);
+    return crypto.subtle.digest(algorithm, values).then(toUint8Array);
   }
 };
 
-const liveSignatureAlgorithms = {
+const LiveSignatureAlgorithms = {
   [LiveSignatureAlgorithm.RSASHA1]: {
     name: 'RSASSA-PKCS1-v1_5',
     hash: {name: 'SHA-1'},
@@ -86,7 +79,7 @@ const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey) => 
   // importKey...? might be needed to initialize shit
 
   return data => crypto.subtle.sign(
-    liveSignatureAlgorithms[liveSignatureAlgorithm],
+    LiveSignatureAlgorithms[liveSignatureAlgorithm],
     privateKey,
     data,
   ).then(toUint8Array);
@@ -96,7 +89,7 @@ const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, publicKey) =>
   // public key from swarm identifier?
 
   return (signature, data) => crypto.subtle.verify(
-    liveSignatureAlgorithms[liveSignatureAlgorithm],
+    LiveSignatureAlgorithms[liveSignatureAlgorithm],
     publicKey,
     signature,
     data,
@@ -155,6 +148,10 @@ const createContentIntegrityVerifierFactory = (
       return this.signature.getHash();
     }
 
+    getSignatureHash() {
+      return this.hash;
+    }
+
     compare(value) {
       return this.verifyHash().then(() => this.signature.compare(value));
     }
@@ -182,7 +179,7 @@ const createContentIntegrityVerifierFactory = (
       return this.rootAddress.getChunkCount();
     }
 
-    getConstituentHashBins(bin) {
+    getConstituentHashBins({bin}) {
       if (!this.rootAddress.containsBin(bin)) {
         throw new Error('bin out of range');
       }
@@ -222,6 +219,16 @@ const createContentIntegrityVerifierFactory = (
       });
 
       return bins;
+    }
+
+    getConstituentSignatures(address) {
+      return this.getConstituentHashBins(address).map(({
+        siblingBin,
+        siblingBfsIndex,
+      }) => ({
+        bin: siblingBin,
+        signature: this.signatures[siblingBfsIndex],
+      }));
     }
 
     static from(values, rootAddress = new Address(MerkleHashTree.minSize(values.length) - 1)) {
@@ -269,11 +276,11 @@ const createContentIntegrityVerifierFactory = (
       this.signatures[bin] = signature;
     }
 
-    verifyChunk({bin}, value) {
+    verifyChunk(address, value) {
       const signatures = [];
       let hashResult = merkleHashTreeFunction(value);
 
-      this.hashTree.getConstituentHashBins(bin).some(({
+      this.hashTree.getConstituentHashBins(address).some(({
         isRoot,
         branch,
         bfsIndex,
@@ -347,7 +354,7 @@ const createContentIntegrityVerifierFactory = (
         },
       );
 
-      return index >= 0 ? this.subtrees[index] : null;
+      return index < 0 ? null : this.subtrees[index];
     }
 
     insertSubtree(subtree) {
@@ -393,6 +400,10 @@ const createContentIntegrityVerifierFactory = (
       let subtree = this.findSubtree(address) || new MerkleHashTree(address);
       return new MerkleHashSubtreeVerifier(this, subtree);
     }
+
+    getConstituentSignatures(address) {
+      return this.findSubtree(address).getConstituentSignatures(address);
+    }
   }
 
   class MerkleHashSubtreeVerifier extends MerkleHashTreeVerifier {
@@ -404,42 +415,6 @@ const createContentIntegrityVerifierFactory = (
     verifyChunk(address, value) {
       return super.verifyChunk(address, value)
         .then(this.unifiedHashTree.insertSubtree(this.hashTree));
-    }
-  }
-
-  class MerkleHashTreeVerifierFactory {
-    constructor() {
-      this.hashTree = null;
-    }
-
-    createVerifier() {
-      return new this.hashTree.createVerifier();
-    }
-
-    getIntegrityMessages() {
-      return [];
-    }
-  }
-
-  class UnifiedMerkleHashTreeVerifierFactory {
-    constructor() {
-      this.hashTree = new UnifiedMerkleHashTree();
-    }
-
-    setLiveDiscardWindow(liveDiscardWindow) {
-      this.hashTree.setLiveDiscardWindow(liveDiscardWindow);
-    }
-
-    appendSubtree(values) {
-      return this.hashTree.appendSubtree(values);
-    }
-
-    createVerifier(address) {
-      return this.hashTree.createVerifier(address);
-    }
-
-    getIntegrityMessages() {
-      return [];
     }
   }
 
@@ -458,7 +433,7 @@ const createContentIntegrityVerifierFactory = (
       return new NoneVerifier();
     }
 
-    getIntegrityMessages() {
+    getConstituentSignatures() {
       return [];
     }
   }
@@ -468,15 +443,18 @@ const createContentIntegrityVerifierFactory = (
     case ContentIntegrityProtectionMethod.None:
       return new NoneVerifierFactory();
     case ContentIntegrityProtectionMethod.MerkleHashTree:
-      return new MerkleHashTreeVerifierFactory();
+      return new MerkleHashTree();
     case ContentIntegrityProtectionMethod.UnifiedMerkleTree:
-      return new UnifiedMerkleHashTreeVerifierFactory();
+      return new UnifiedMerkleHashTree();
     default:
       throw new Error('unsupported content integrity protection method');
   }
 };
 
 module.exports = {
+  MerkleHashTreeFunctionByteLengths,
+  MerkleHashTreeFunctionAlgorithms,
+  LiveSignatureAlgorithms,
   createMerkleHashTreeFunction,
   createLiveSignatureSignFunction,
   createLiveSignatureVerifyFunction,

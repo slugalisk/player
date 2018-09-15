@@ -1,6 +1,7 @@
 const { Buffer } = require('buffer');
 const hirestime = require('../hirestime');
 const { binBounds } = require('./address');
+const { MerkleHashTreeFunctionByteLengths } = require('./integrity');
 
 const {
   ProtocolOptions,
@@ -36,6 +37,10 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
       const [start, end] = binBounds(this.value);
       return (end - start) * chunkSize;
     }
+
+    static from({bin}) {
+      return new Bin32ChunkAddress(bin);
+    }
   }
 
   class ChunkRange32ChunkAddress {
@@ -62,6 +67,10 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
 
     rangeByteLength() {
       return (this.end - this.start) * chunkSize;
+    }
+
+    static from({start, end}) {
+      return new ChunkRange32ChunkAddress(start, end);
     }
   }
 
@@ -132,14 +141,7 @@ const createLiveSignatureFieldType = (liveSignatureAlgorithm, publicKey) => {
 };
 
 const createIntegrityHashFieldType = merkleHashTreeFunction => {
-  const hashByteLengths = {
-    [MerkleHashTreeFunction.SHA1]: 20,
-    [MerkleHashTreeFunction.SHA224]: 28,
-    [MerkleHashTreeFunction.SHA256]: 32,
-    [MerkleHashTreeFunction.SHA384]: 48,
-    [MerkleHashTreeFunction.SHA512]: 64,
-  };
-  const byteLength = hashByteLengths[merkleHashTreeFunction];
+  const byteLength = MerkleHashTreeFunctionByteLengths[merkleHashTreeFunction];
 
   class IntegrityHashField extends createBufferFieldType(byteLength) {
     constructor(value) {

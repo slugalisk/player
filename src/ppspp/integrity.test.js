@@ -3,14 +3,14 @@
 const integrity = require('./integrity');
 const crypto = require('crypto');
 const Address = require('./address');
-
 const webcrypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
+const {} = require('./encoding');
 
-import {
+const {
   ContentIntegrityProtectionMethod,
   MerkleHashTreeFunction,
   LiveSignatureAlgorithm,
-} from './constants';
+} = require('./constants');
 
 it ('search', async () => {
   const {publicKey, privateKey} = await webcrypto.subtle.generateKey(
@@ -56,15 +56,17 @@ it ('search', async () => {
   await verifierFactory.appendSubtree(chunks);
   await verifierFactory.appendSubtree(chunks);
 
-  console.log(verifierFactory.hashTree);
+  console.log(verifierFactory);
 
   const bin = 4;
 
-  const verifier = verifierFactory.createVerifier(new Address(bin + 32));
-  console.log(verifier);
+  const verifier = verifierFactory.createVerifier(new Address(bin));
+  // console.log(verifier);
 
 
-  return verifier.verifyChunk(new Address(bin + 32), chunks[bin / 2])
-    .then(() => console.log('success'))
-    .catch(e => console.log('error', e));
+  // return verifier.verifyChunk(new Address(bin), chunks[bin / 2])
+  //   .then(() => console.log('success'))
+  //   .catch(e => console.log('error', e));
+
+  console.log(verifierFactory.getConstituentSignatures(new Address(bin)));
 });
