@@ -144,9 +144,9 @@ class Peer {
     this.state = PeerState.AWAITING_HANDSHAKE;
   }
 
-  getContentIntegrityVerifier() {
+  getContentIntegrityVerifier(address) {
     if (this.integrityVerifier === null) {
-      this.swarm.contentIntegrity.createVerifier();
+      this.swarm.contentIntegrity.createVerifier(address);
     }
     return this.integrityVerifier;
   }
@@ -207,10 +207,11 @@ class Peer {
     this.state = PeerState.READY;
   }
 
-  handleDataMessage({address, data}) {
-    this.getContentIntegrityVerifier().verifyChunk(data)
+  handleDataMessage(message) {
+    const address = Address.from(message.address);
+    this.getContentIntegrityVerifier().verifyChunk(message.data)
       .then(() => {
-        this.swarm.chunkBuffer.insert(data);
+        this.swarm.chunkBuffer.insert(address, message.data);
 
         const {encoding} = this.swarm;
         this.channel.send(new encoding.Datagram(
@@ -234,12 +235,14 @@ class Peer {
     // clear retransmit timer?
   }
 
-  handleIntegrityMessage({address, hash}) {
-    this.getContentIntegrityVerifier().setHash(Address.from(address), hash);
+  handleIntegrityMessage(message) {
+    const address = Address.from(message.address);
+    this.getContentIntegrityVerifier(address).setHash(address, message.hash);
   }
 
-  handleSignatureMessage({address, signature}) {
-    this.getContentIntegrityVerifier().setHashSignature(Address.from(address), signature);
+  handleSignatureMessage(message) {
+    const address = Address.from(message.address);
+    this.getContentIntegrityVerifier(address).setHashSignature(address, message.signature);
   }
 
   // TODO: throttling (request queue/prioritization)

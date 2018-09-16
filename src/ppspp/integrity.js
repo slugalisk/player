@@ -3,6 +3,7 @@ const arrayEqual = require('array-equal');
 const crypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
 const binSearch = require('../binSearch');
 const Address = require('./address');
+const SwarmId = require('./swarmid');
 
 const {
   ContentIntegrityProtectionMethod,
@@ -44,7 +45,7 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
     }
 
     if (values.length > 1) {
-      values = new Uint8Array(values);
+      values = new Uint8Array(Buffer.concat(values));
     } else {
       values = values[0];
     }
@@ -56,10 +57,14 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
 const LiveSignatureAlgorithms = {
   [LiveSignatureAlgorithm.RSASHA1]: {
     name: 'RSASSA-PKCS1-v1_5',
+    modulusLength: 2048,
+    publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
     hash: {name: 'SHA-1'},
   },
   [LiveSignatureAlgorithm.RSASHA256]: {
     name: 'RSASSA-PKCS1-v1_5',
+    modulusLength: 2048,
+    publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
     hash: {name: 'SHA-256'},
   },
   [LiveSignatureAlgorithm.ECDSAP256SHA256]: {
@@ -74,26 +79,68 @@ const LiveSignatureAlgorithms = {
   },
 };
 
-const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey) => {
-  // generateKey to bootstrap broadcast
-  // importKey...? might be needed to initialize shit
-
-  return data => crypto.subtle.sign(
-    LiveSignatureAlgorithms[liveSignatureAlgorithm],
+const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey, algorithm = {}) => {
+  const importResult = crypto.subtle.importKey(
+    "pkcs8",
     privateKey,
-    data,
-  ).then(toUint8Array);
+    LiveSignatureAlgorithms[liveSignatureAlgorithm],
+    false,
+    ['sign'],
+  );
+
+  return data => importResult
+    .then(privateKey => crypto.subtle.sign(
+      LiveSignatureAlgorithms[liveSignatureAlgorithm],
+      privateKey,
+      data,
+    ))
+    .then(toUint8Array);
 };
 
-const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, publicKey) => {
-  // public key from swarm identifier?
-
-  return (signature, data) => crypto.subtle.verify(
-    LiveSignatureAlgorithms[liveSignatureAlgorithm],
+const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, swarmId, algorithm = {}) => {
+  const publicKey = new Uint8Array(swarmId.publicKey);
+  const importResult = crypto.subtle.importKey(
+    "spki",
     publicKey,
-    signature,
-    data,
-  ).then(toUint8Array);
+    {
+      ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
+      ...swarmId.getKeyParams(),
+      ...algorithm,
+    },
+    false,
+    ['verify'],
+  );
+
+  return (signature, data) => importResult
+    .then(publicKey => crypto.subtle.verify(
+      LiveSignatureAlgorithms[liveSignatureAlgorithm],
+      publicKey,
+      signature,
+      data,
+    ))
+    .then(toUint8Array);
+};
+
+const generateKeyPair = (liveSignatureAlgorithm, algorithm = {}) => {
+  return crypto.subtle.generateKey(
+    LiveSignatureAlgorithms[liveSignatureAlgorithm],
+    true,
+    ['sign', 'verify'],
+  )
+    .then(keyPair => Promise.all([
+      crypto.subtle.exportKey("pkcs8", keyPair.privateKey),
+      crypto.subtle.exportKey("spki", keyPair.publicKey),
+    ]))
+    .then(([privateKey, publicKey]) => ({
+      privateKey,
+      publicKey,
+      swarmId: SwarmId.from({
+        ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
+        ...algorithm,
+        liveSignatureAlgorithm,
+        publicKey,
+      }),
+    }));
 };
 
 const unavailableLiveSignatureSignFunction = () => Promise.reject('live signature function not available');
@@ -125,6 +172,7 @@ const createContentIntegrityVerifierFactory = (
     }
   }
 
+  // TODO: timestamp in hash?
   class SignedSignature {
     constructor(signature, hash) {
       this.signature = signature;
@@ -377,7 +425,7 @@ const createContentIntegrityVerifierFactory = (
     }
 
     pruneSubtrees() {
-      while (this.chunkCount - this.subtrees[0].getChunkCount() > this.liveDiscardWindow) {
+      while (this.subtrees.length > 0 && this.chunkCount > this.liveDiscardWindow) {
         const removedTree = this.subtrees.shift();
         this.chunkCount -= removedTree.getChunkCount();
       }
@@ -459,4 +507,5 @@ module.exports = {
   createLiveSignatureSignFunction,
   createLiveSignatureVerifyFunction,
   createContentIntegrityVerifierFactory,
+  generateKeyPair,
 };

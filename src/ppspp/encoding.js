@@ -20,8 +20,8 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
       this.value = value;
     }
 
-    read(buf, offset) {
-      this.value = buf.readUint32BE(offset);
+    read(buffer, offset) {
+      this.value = buffer.readUInt32BE(offset);
       return 4;
     }
 
@@ -29,13 +29,13 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
       return 4;
     }
 
-    write(buf, offset) {
-      buf.writeUint32BE(this.value, offset);
+    write(buffer, offset) {
+      buffer.writeUInt32BE(this.value, offset);
     }
 
     rangeByteLength() {
       const [start, end] = binBounds(this.value);
-      return (end - start) * chunkSize;
+      return (end - start + 1) * chunkSize;
     }
 
     static from({bin}) {
@@ -50,9 +50,9 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
       this.end = end;
     }
 
-    read(buf, offset) {
-      this.start = buf.readUint32BE(offset);
-      this.end = buf.readUint32BE(offset + 4);
+    read(buffer, offset) {
+      this.start = buffer.readUInt32BE(offset);
+      this.end = buffer.readUInt32BE(offset + 4);
       return 8;
     }
 
@@ -60,13 +60,13 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
       return 8;
     }
 
-    write(buf, offset) {
-      buf.writeUint32BE(this.start, offset);
-      buf.writeUint32BE(this.end, offset + 4);
+    write(buffer, offset) {
+      buffer.writeUInt32BE(this.start, offset);
+      buffer.writeUInt32BE(this.end, offset + 4);
     }
 
     rangeByteLength() {
-      return (this.end - this.start) * chunkSize;
+      return (this.end - this.start + 1) * chunkSize;
     }
 
     static from({start, end}) {
@@ -87,11 +87,11 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
 const createBufferFieldType = byteLength => {
   class BufferField {
     constructor(value = Buffer.alloc(byteLength)) {
-      this.value = value;
+      this.value = Buffer.from(value);
     }
 
-    read(buf, offset) {
-      buf.copy(this.value, 0, offset, offset + byteLength);
+    read(buffer, offset) {
+      buffer.copy(this.value, 0, offset, offset + byteLength);
       return byteLength;
     }
 
@@ -99,36 +99,16 @@ const createBufferFieldType = byteLength => {
       return byteLength;
     }
 
-    write(buf, offset) {
-      this.value.copy(buf, offset);
+    write(buffer, offset) {
+      this.value.copy(buffer, offset);
     }
   }
 
   return BufferField;
 };
 
-const getLiveSignatureByteLength = (liveSignatureAlgorithm, publicKey) => {
-  const publicKeyAlgorithm = publicKey.readUInt8(0);
-
-  if (publicKeyAlgorithm !== liveSignatureAlgorithm) {
-    throw new Error('live signature algorithm does not match public key');
-  }
-
-  switch (liveSignatureAlgorithm) {
-    case LiveSignatureAlgorithm.RSASHA1:
-    case LiveSignatureAlgorithm.RSASHA256:
-      return publicKey.readUint8(1) || publicKey.readUint32BE(2);
-    case LiveSignatureAlgorithm.ECDSAP256SHA256:
-      return 64;
-    case LiveSignatureAlgorithm.ECDSAP384SHA384:
-      return 96;
-    default:
-      throw new Error('unsupported live signature algorithm');
-  }
-};
-
-const createLiveSignatureFieldType = (liveSignatureAlgorithm, publicKey) => {
-  const byteLength = getLiveSignatureByteLength(liveSignatureAlgorithm, publicKey);
+const createLiveSignatureFieldType = (liveSignatureAlgorithm, swarmId) => {
+  const byteLength = swarmId.getLiveSignatureByteLength();
 
   class LiveSignatureField extends createBufferFieldType(byteLength) {
     constructor(value) {
@@ -159,8 +139,8 @@ const createEncoding = () => {
       this.value = value;
     }
 
-    read(buf, offset) {
-      this.value = buf.readUint8(offset);
+    read(buffer, offset) {
+      this.value = buffer.readUInt8(offset);
       return 1;
     }
 
@@ -168,8 +148,8 @@ const createEncoding = () => {
       return 1;
     }
 
-    write(buf, offset) {
-      buf.writeUint8(this.value, offset);
+    write(buffer, offset) {
+      buffer.writeUInt8(this.value, offset);
     }
   }
 
@@ -178,8 +158,8 @@ const createEncoding = () => {
       this.value = value;
     }
 
-    read(buf, offset) {
-      this.value = buf.readUint32BE(offset);
+    read(buffer, offset) {
+      this.value = buffer.readUInt32BE(offset);
       return 4;
     }
 
@@ -187,8 +167,8 @@ const createEncoding = () => {
       return 4;
     }
 
-    write(buf, offset) {
-      buf.writeUint32BE(this.value, offset);
+    write(buffer, offset) {
+      buffer.writeUInt32BE(this.value, offset);
     }
   }
 
@@ -207,16 +187,17 @@ const createEncoding = () => {
   }
 
   class SwarmIdentifierProtocolOption {
-    constructor(value = '') {
+    constructor(value = []) {
       this.type = ProtocolOptions.SwarmIdentifier
-      this.value = value;
+      this.value = Buffer.from(value);
     }
 
-    read(buf, offset) {
-      const length = buf.readUint16BE(buf, offset);
+    read(buffer, offset) {
+      const length = buffer.readUInt16BE(offset);
       offset += 2;
 
-      this.value = buf.slice(offset, offset + length).toString();
+      this.value = buffer.slice(offset, offset + length);
+
       return length + 2;
     }
 
@@ -224,9 +205,9 @@ const createEncoding = () => {
       return Buffer.byteLength(this.value) + 2;
     }
 
-    write(buf, offset) {
-      buf.writeUint16BE(Buffer.byteLength(this.value));
-      buf.write(this.value, offset + 2);
+    write(buffer, offset) {
+      buffer.writeUInt16BE(Buffer.byteLength(this.value));
+      buffer.write(this.value, offset + 2);
     }
   }
 
@@ -272,12 +253,12 @@ const createEncoding = () => {
       messageTypes.forEach(type => this.value[type] = true);
     }
 
-    read(buf, offset) {
-      const length = buf.readUint8(offset);
+    read(buffer, offset) {
+      const length = buffer.readUInt8(offset);
       offset += 1;
 
       for (let i = 0; i < length; i ++) {
-        const byte = buf[offset + i];
+        const byte = buffer[offset + i];
         for (let j = 0; j < 8; j ++) {
           this.value[i * 8 + j] = Boolean(byte & (1 << 7 - j));
         }
@@ -292,26 +273,26 @@ const createEncoding = () => {
 
     toBitmap() {
       const length = this.bitmapByteLength();
-      const buf = Buffer.alloc(length);
+      const buffer = Buffer.alloc(length);
 
       for (let i = 0; i < length; i ++) {
         let byte = 0;
         for (let j = 0; j < 8; j ++) {
           byte = (byte << 1) | (this.value[i * 8 + j] ? 1 : 0);
         }
-        buf.writeUint8(byte, i);
+        buffer.writeUInt8(byte, i);
       }
-      return buf;
+      return buffer;
     }
 
     byteLength() {
       return this.bitmapByteLength() + 1;
     }
 
-    write(buf, offset) {
+    write(buffer, offset) {
       const bitmap = this.toBitmap();
-      buf.writeUint8(bitmap.length, offset);
-      bitmap.copy(buf, offset + 1);
+      buffer.writeUInt8(bitmap.length, offset);
+      bitmap.copy(buffer, offset + 1);
     }
   }
 
@@ -342,15 +323,15 @@ const createEncoding = () => {
       this.options = options;
     }
 
-    read(buf, offset) {
+    read(buffer, offset) {
       let length = 0;
 
-      this.channelId = buf.readUint32BE(offset);
+      this.channelId = buffer.readUInt32BE(offset);
       length += 4;
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const code = buf.readUint8(offset + length);
+        const code = buffer.readUInt8(offset + length);
         length += 1;
 
         if (code === ProtocolOptions.EndOption) {
@@ -360,7 +341,7 @@ const createEncoding = () => {
         const RecordType = protocolOptionRecordTypes[code];
         const option = new RecordType();
 
-        length += option.read(buf, offset + length);
+        length += option.read(buffer, offset + length);
         this.options.push(option);
       }
 
@@ -371,21 +352,21 @@ const createEncoding = () => {
       return this.options.reduce((length, option) => length + option.byteLength() + 1, 0) + 5;
     }
 
-    write(buf, offset) {
+    write(buffer, offset) {
       let length = 0;
 
-      buf.writeUint32BE(this.channelId, offset);
+      buffer.writeUInt32BE(this.channelId, offset);
       length += 4;
 
       this.options.forEach(option => {
-        buf.writeUint8(option.type, offset + length);
+        buffer.writeUInt8(option.type, offset + length);
         length += 1;
 
-        option.write(buf, offset + length);
+        option.write(buffer, offset + length);
         length += option.byteLength();
       });
 
-      buf.writeUint8(ProtocolOptions.EndOption, offset + length)
+      buffer.writeUInt8(ProtocolOptions.EndOption, offset + length)
       length += 1;
 
       return length;
@@ -397,10 +378,10 @@ const createEncoding = () => {
       this.value = value;
     }
 
-    read(buf, offset) {
+    read(buffer, offset) {
       this.value = [
-        buf.readUint32BE(buf, offset),
-        buf.readUint32BE(buf, offset + 4),
+        buffer.readUInt32BE(offset),
+        buffer.readUInt32BE(offset + 4),
       ];
       return 8;
     }
@@ -409,9 +390,9 @@ const createEncoding = () => {
       return 8;
     }
 
-    write(buf, offset) {
-      buf.writeUint32BE(this.timestamp[1], offset);
-      buf.writeUint32BE(this.timestamp[0], offset + 4);
+    write(buffer, offset) {
+      buffer.writeUInt32BE(this.value[1], offset);
+      buffer.writeUInt32BE(this.value[0], offset + 4);
     }
   }
 
@@ -423,13 +404,13 @@ const createEncoding = () => {
       this.timestamp = timestamp;
     }
 
-    read(buf, offset) {
-      let length = this.address.read(buf, offset);
-      length += this.timestamp.read(buf, offset + length);
+    read(buffer, offset) {
+      let length = this.address.read(buffer, offset);
+      length += this.timestamp.read(buffer, offset + length);
 
       offset += length;
-      const dataLength = Math.min(this.address.rangeByteLength(), buf.length - offset);
-      this.data = buf.slice(offset, offset + dataLength);
+      const dataLength = Math.min(this.address.rangeByteLength(), buffer.length - offset);
+      this.data = buffer.slice(offset, offset + dataLength);
 
       return length + dataLength;
     }
@@ -438,16 +419,16 @@ const createEncoding = () => {
       return this.address.byteLength() + this.data.length + 8;
     }
 
-    write(buf, offset) {
+    write(buffer, offset) {
       let length = 0
 
-      this.address.write(buf, offset);
+      this.address.write(buffer, offset);
       length += this.address.byteLength();
 
-      this.timestamp.write(buf, offset + length);
+      this.timestamp.write(buffer, offset + length);
       length += this.timestamp.byteLength();
 
-      this.data.copy(buf, offset + length);
+      this.data.copy(buffer, offset + length);
     }
   }
 
@@ -456,16 +437,16 @@ const createEncoding = () => {
       this.address = address;
     }
 
-    read(buf, offset) {
-      return this.address.read(buf, offset);
+    read(buffer, offset) {
+      return this.address.read(buffer, offset);
     }
 
     byteLength() {
       return this.address.byteLength();
     }
 
-    write(buf, offset) {
-      this.address.write(buf, offset);
+    write(buffer, offset) {
+      this.address.write(buffer, offset);
     }
   }
 
@@ -476,9 +457,9 @@ const createEncoding = () => {
       this.delaySample = delaySample;
     }
 
-    read(buf, offset) {
-      let length = this.address.read(buf, offset);
-      length += this.delaySample.read(buf, offset + length);
+    read(buffer, offset) {
+      let length = this.address.read(buffer, offset);
+      length += this.delaySample.read(buffer, offset + length);
       return length;
     }
 
@@ -486,9 +467,9 @@ const createEncoding = () => {
       return this.address.byteLength() + this.delaySample.byteLength();
     }
 
-    write(buf, offset) {
-      this.address.write(buf, offset);
-      this.delaySample.write(buf, offset + this.address.byteLength());
+    write(buffer, offset) {
+      this.address.write(buffer, offset);
+      this.delaySample.write(buffer, offset + this.address.byteLength());
     }
   }
 
@@ -506,9 +487,9 @@ const createEncoding = () => {
       this.hash = hash;
     }
 
-    read(buf, offset) {
-      let length = this.address.read(buf, offset);
-      length += this.hash.read(buf, offset + length);
+    read(buffer, offset) {
+      let length = this.address.read(buffer, offset);
+      length += this.hash.read(buffer, offset + length);
       return length;
     }
 
@@ -516,9 +497,9 @@ const createEncoding = () => {
       return this.address.byteLength() + this.hash.byteLength();
     }
 
-    write(buf, offset) {
-      this.address.write(buf, offset);
-      this.hash.write(buf, offset + this.address.byteLength());
+    write(buffer, offset) {
+      this.address.write(buffer, offset);
+      this.hash.write(buffer, offset + this.address.byteLength());
     }
   }
 
@@ -534,10 +515,10 @@ const createEncoding = () => {
       this.signature = signature;
     }
 
-    read(buf, offset) {
-      let length = this.address.read(buf, offset);
-      length += this.timestamp.read(buf, offset + length);
-      length += this.signature.read(buf, offset + length);
+    read(buffer, offset) {
+      let length = this.address.read(buffer, offset);
+      length += this.timestamp.read(buffer, offset + length);
+      length += this.signature.read(buffer, offset + length);
       return length;
     }
 
@@ -545,16 +526,16 @@ const createEncoding = () => {
       return this.address.byteLength() + this.timestamp.byteLength() + this.signature.byteLength();
     }
 
-    write(buf, offset) {
+    write(buffer, offset) {
       let length = 0;
 
-      this.address.write(buf, offset);
+      this.address.write(buffer, offset);
       length += this.address.byteLength();
 
-      this.timestamp.write(buf, offset + length);
+      this.timestamp.write(buffer, offset + length);
       length += this.timestamp.byteLength();
 
-      this.signature.write(buf, offset + length);
+      this.signature.write(buffer, offset + length);
     }
   }
 
@@ -614,7 +595,7 @@ const createEncoding = () => {
   class Messages {
     constructor(values = []) {
       this.values = values;
-      this.buf = null;
+      this.buffer = null;
       this.offset = 0;
     }
 
@@ -629,18 +610,18 @@ const createEncoding = () => {
     }
 
     next() {
-      if (this.offset >= this.buf.length) {
+      if (this.offset >= this.buffer.length) {
         return;
       }
 
-      const messageType = this.buf.readUint8(this.offset);
+      const messageType = this.buffer.readUInt8(this.offset);
       this.offset += 1;
 
       const RecordType = messageRecordTypes[messageType];
       const message = new RecordType();
       this.values.push(message);
 
-      this.offset += message.read(this.buf, this.offset);
+      this.offset += message.read(this.buffer, this.offset);
 
       return message;
     }
@@ -651,24 +632,24 @@ const createEncoding = () => {
       return this.values;
     }
 
-    read(buf, offset) {
-      this.buf = buf;
+    read(buffer, offset) {
+      this.buffer = buffer;
       this.offset = offset;
       return 0;
     }
 
     byteLength() {
-      this.values.reduce((length, message) => length + message.byteLength() + 1, 0);
+      return this.values.reduce((length, message) => length + message.byteLength() + 1, 0);
     }
 
-    write(buf, offset) {
+    write(buffer, offset) {
       let length = 0;
 
       this.values.forEach(message => {
-        buf.writeUint8(message.type, offset + length);
+        buffer.writeUInt8(message.type, offset + length);
         length += 1;
 
-        message.write(buf, offset + length);
+        message.write(buffer, offset + length);
         length += message.byteLength();
       });
 
@@ -682,13 +663,13 @@ const createEncoding = () => {
       this.messages = Messages.from(messages);
     }
 
-    read(buf) {
+    read(buffer) {
       let length = 0;
 
-      this.channelId = buf.readUint32BE(0);
+      this.channelId = buffer.readUInt32BE(0);
       length += 4;
 
-      length += this.messages.read(buf, length);
+      length += this.messages.read(buffer, length);
 
       return length;
     }
@@ -697,21 +678,27 @@ const createEncoding = () => {
       return this.messages.byteLength() + 4;
     }
 
-    write(buf) {
+    write(buffer) {
       let length = 0;
 
-      buf.writeUint32BE(this.channelId, 0);
+      buffer.writeUInt32BE(this.channelId, 0);
       length += 4;
 
-      length += this.messages.write(buf, length);
+      length += this.messages.write(buffer, length);
 
       return length;
     }
 
     toBuffer() {
-      const buf = Buffer.alloc(this.byteLength());
-      this.write(buf);
-      return buf;
+      const buffer = Buffer.alloc(this.byteLength());
+      this.write(buffer);
+      return buffer;
+    }
+
+    static from(buffer) {
+      const datagram = new Datagram();
+      datagram.read(buffer);
+      return datagram;
     }
   }
 
@@ -769,7 +756,7 @@ const createEncoding = () => {
   };
 };
 
-const readChannelId = buf => buf.readUint32BE(0);
+const readChannelId = buffer => buffer.readUInt32BE(0);
 
 module.exports = {
   createChunkAddressFieldType,
