@@ -80,62 +80,48 @@ const LiveSignatureAlgorithms = {
 };
 
 const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey, algorithm = {}) => {
-  const importResult = crypto.subtle.importKey(
-    "pkcs8",
-    privateKey,
-    LiveSignatureAlgorithms[liveSignatureAlgorithm],
-    false,
-    ['sign'],
-  );
+  algorithm = {
+    ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
+    ...algorithm,
+  };
+
+  const importResult = crypto.subtle.importKey('pkcs8', privateKey, algorithm, false, ['sign']);
 
   return data => importResult
-    .then(privateKey => crypto.subtle.sign(
-      LiveSignatureAlgorithms[liveSignatureAlgorithm],
-      privateKey,
-      data,
-    ))
+    .then(privateKey => crypto.subtle.sign(algorithm, privateKey, data))
     .then(toUint8Array);
 };
 
 const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, swarmId, algorithm = {}) => {
+  algorithm = {
+    ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
+    ...swarmId.getKeyParams(),
+    ...algorithm,
+  };
+
   const publicKey = new Uint8Array(swarmId.publicKey);
-  const importResult = crypto.subtle.importKey(
-    "spki",
-    publicKey,
-    {
-      ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
-      ...swarmId.getKeyParams(),
-      ...algorithm,
-    },
-    false,
-    ['verify'],
-  );
+  const importResult = crypto.subtle.importKey('spki', publicKey, algorithm, false, ['verify']);
 
   return (signature, data) => importResult
-    .then(publicKey => crypto.subtle.verify(
-      LiveSignatureAlgorithms[liveSignatureAlgorithm],
-      publicKey,
-      signature,
-      data,
-    ))
+    .then(publicKey => crypto.subtle.verify(algorithm, publicKey, signature, data))
     .then(toUint8Array);
 };
 
 const generateKeyPair = (liveSignatureAlgorithm, algorithm = {}) => {
-  return crypto.subtle.generateKey(
-    LiveSignatureAlgorithms[liveSignatureAlgorithm],
-    true,
-    ['sign', 'verify'],
-  )
+  algorithm = {
+    ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
+    ...algorithm,
+  };
+
+  return crypto.subtle.generateKey(algorithm, true, ['sign', 'verify'])
     .then(keyPair => Promise.all([
-      crypto.subtle.exportKey("pkcs8", keyPair.privateKey),
-      crypto.subtle.exportKey("spki", keyPair.publicKey),
+      crypto.subtle.exportKey('pkcs8', keyPair.privateKey),
+      crypto.subtle.exportKey('spki', keyPair.publicKey),
     ]))
     .then(([privateKey, publicKey]) => ({
       privateKey,
       publicKey,
       swarmId: SwarmId.from({
-        ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
         ...algorithm,
         liveSignatureAlgorithm,
         publicKey,
@@ -425,7 +411,7 @@ const createContentIntegrityVerifierFactory = (
     }
 
     pruneSubtrees() {
-      while (this.subtrees.length > 0 && this.chunkCount > this.liveDiscardWindow) {
+      while (this.subtrees.length > 0 && this.chunkCount - this.subtrees[0].getChunkCount() > this.liveDiscardWindow) {
         const removedTree = this.subtrees.shift();
         this.chunkCount -= removedTree.getChunkCount();
       }

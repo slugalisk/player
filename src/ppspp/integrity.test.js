@@ -3,7 +3,7 @@
 const integrity = require('./integrity');
 const crypto = require('crypto');
 const Address = require('./address');
-const webcrypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
+const SwarmId = require('./swarmid');
 const {
   createEncoding,
   createChunkAddressFieldType,
@@ -31,8 +31,6 @@ it ('search', async () => {
     privateKey,
     swarmId,
   } = await integrity.generateKeyPair(liveSignatureAlgorithm);
-
-  console.log(new Uint8Array(swarmId));
 
   const verifierFactory = integrity.createContentIntegrityVerifierFactory(
     ContentIntegrityProtectionMethod.UnifiedMerkleTree,
@@ -102,10 +100,12 @@ it ('search', async () => {
 
   // console.log(buffer);
 
+  const remoteSwarmId = SwarmId.from(swarmId.toBuffer());
+
   const remoteVerifierFactory = integrity.createContentIntegrityVerifierFactory(
     ContentIntegrityProtectionMethod.UnifiedMerkleTree,
     integrity.createMerkleHashTreeFunction(merkleHashTreeFunction),
-    integrity.createLiveSignatureVerifyFunction(liveSignatureAlgorithm, swarmId),
+    integrity.createLiveSignatureVerifyFunction(liveSignatureAlgorithm, remoteSwarmId),
   );
 
   let remoteVerifier = null;

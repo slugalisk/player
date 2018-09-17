@@ -70,28 +70,30 @@ class SwarmId {
     return buffer;
   }
 
-  static read(buffer) {
-    const params = {};
-    let length = 1;
+  read(buffer) {
+    let length = 0;
 
-    params.liveSignatureAlgorithm = buffer.readUInt8(0);
+    this.liveSignatureAlgorithm = buffer.readUInt8(0);
     length += 1;
 
-    if (isRsaAlgorithm(params.liveSignatureAlgorithm)) {
-      params.publicExponent = buffer.slice(length, length + 4);
+    if (isRsaAlgorithm(this.liveSignatureAlgorithm)) {
+      this.publicExponent = buffer.slice(length, length + 4);
       length += 4;
 
-      params.modulusLength = buffer.readUInt323BE(length);
+      this.modulusLength = buffer.readUInt32BE(length);
       length += 4;
     }
 
-    params.publicKey = buffer.slice(length);
-
-    return SwarmId.from(params);
+    this.publicKey = buffer.slice(length);
   }
 
   static from(values) {
-    console.log(values);
+    if (ArrayBuffer.isView(values)) {
+      const swarmId = Object.create(SwarmId.prototype);
+      swarmId.read(Buffer.from(values));
+      return swarmId;
+    }
+
     return new SwarmId(
       values.liveSignatureAlgorithm,
       values.publicKey,
