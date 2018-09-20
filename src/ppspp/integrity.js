@@ -45,7 +45,7 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
     }
 
     if (values.length > 1) {
-      values = new Uint8Array(Buffer.concat(values));
+      values = new Uint8Array(Buffer.concat(values.map(value => Buffer.from(value))));
     } else {
       values = values[0];
     }
@@ -352,7 +352,7 @@ const createContentIntegrityVerifierFactory = (
 
           const siblingHash = siblingSignature.getHash();
           const siblings = branch === 1 ? [hash, siblingHash] : [siblingHash, hash];
-          return merkleHashTreeFunction(Buffer.concat(siblings));
+          return merkleHashTreeFunction(...siblings);
         });
         return false;
       });
@@ -402,7 +402,7 @@ const createContentIntegrityVerifierFactory = (
       }
 
       this.subtrees.push(subtree);
-      this.subtrees.sort((a, b) => a.start - b.start);
+      this.subtrees.sort((a, b) => a.rootAddress.start - b.rootAddress.start);
 
       this.chunkCount += subtree.getChunkCount();
       this.pruneSubtrees();

@@ -23,7 +23,7 @@ app.use(express.static('public'));
 
 const server = http.createServer(app);
 
-server.listen(port, function() {
+server.listen(port, function(err) {
   const address = server.address();
   console.log('Server running at ' + address.port);
 });
@@ -40,9 +40,9 @@ wss.on('connection', function(ws, req) {
 
   client.on('datachannel', ({channel}) => {
     if (channel.label === 'dht') {
-      dhtClient.addChannel(new dht.Channel(id, channel));
+      dhtClient.createChannel(id, channel);
     } else if (channel.label === 'ppspp') {
-      ppsppClient.addChannel(new ppspp.Channel(channel));
+      ppsppClient.createChannel(channel);
     }
   });
 
@@ -66,3 +66,43 @@ function generateId(addr) {
 
   return new Uint8Array(id);
 }
+
+// ---
+
+const NginxInjector = require('./nginx-injector');
+
+const injector = new NginxInjector();
+injector.start();
+
+injector.on('publish', injector => {
+  ppsppClient.publishSwarm(injector.swarm);
+});
+
+injector.on('unpublish', injector => {
+  ppsppClient.unpublishSwarm(injector.swarm);
+});
+
+const shutdown = (signal = 'SIGTERM') => {
+  console.log(`got signal ${signal}`)
+  injector.stop(() => {
+    console.log('injector shut down');
+    server.close(() => {
+      console.log('server shut down');
+      wss.close(() => {
+        console.log('wss shut down');
+        process.kill(process.pid, signal);
+        // process.exit(signal);
+      });
+    });
+  });
+}
+
+process.once('SIGINT', shutdown);
+process.once('SIGUSR2', shutdown);
+
+process.on('uncaughtException', (err) => {
+  injector.stop();
+  server.close();
+  throw err
+});
+

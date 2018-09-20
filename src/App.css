@@ -2,6 +2,36 @@ body {
   background: #000;
 }
 
+.join-form {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  left: 50%;
+  margin-left: -250px;
+  position: absolute;
+  top: 40%;
+  width: 500px;
+}
+
+.join-form input,
+.join-form button {
+  display: flex;
+  font-size: 1.25em;
+  padding: 10px;
+  border: none;
+}
+
+.join-form input {
+  flex: 100%;
+}
+
+.join-form button {
+  flex: 100px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
 .idle {
   height: 100vh;
   width: 100vw;

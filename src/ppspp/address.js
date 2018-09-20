@@ -15,6 +15,10 @@ class Address {
   }
 
   static from(address) {
+    if (address instanceof Address) {
+      return address;
+    }
+
     switch (address.type) {
       case ChunkAddressingMethod.Bin32:
         return new Address(address.value);

@@ -65,7 +65,9 @@ class Client extends EventEmitter {
     // console.log('handleAdded', channel);
   }
 
-  addChannel(channel) {
+  createChannel(id, wrtcChannel) {
+    const channel = new Channel(id, wrtcChannel);
+
     this.candidates.add(channel);
 
     const messages = [];

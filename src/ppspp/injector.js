@@ -17,41 +17,73 @@ const {
   MerkleHashTreeFunction,
   LiveSignatureAlgorithm,
 } = require('../ppspp/constants');
+const {Swarm} = require('../ppspp');
 
 class Injector {
-  constructor() {
-    const chunkSize = 8 * 1024;
-    const liveDiscardWindow = Math.ceil(15 * 3500 * 1024 / 8 / chunkSize);
-    const chunkAddressingMethod = ChunkAddressingMethod.Bin32;
-    const merkleHashTreeFunction = MerkleHashTreeFunction.SHA256;
-    const liveSignatureAlgorithm = LiveSignatureAlgorithm.ECDSAP256SHA256;
+  constructor(swarm, chunkSize, chunksPerSignature) {
+    this.swarm = swarm;
+    this.chunkSize = chunkSize;
+    this.chunksPerSignature = chunksPerSignature;
+    this.chunkBuffer = [];
+  }
 
-    generateKeyPair(liveSignatureAlgorithm).then(({swarmId, privateKey}) => {
-      const integrity = createContentIntegrityVerifierFactory(
-        ContentIntegrityProtectionMethod.UnifiedMerkleTree,
+  appendChunk(videoChunk) {
+    for (let i = 0; i < videoChunk.length; i += this.chunkSize) {
+      this.chunkBuffer.push(videoChunk.slice(i, Math.min(videoChunk.length, i + this.chunkSize)));
+    }
+
+    while (this.chunkBuffer.length > this.chunksPerSignature) {
+      const subtreeChunks = this.chunkBuffer.splice(0, this.chunksPerSignature);
+      this.swarm.contentIntegrity.appendSubtree(subtreeChunks).then(subtree => {
+        this.swarm.chunkBuffer.set(subtree.rootAddress, subtreeChunks);
+        this.swarm.availableChunks.set(subtree.rootAddress);
+      });
+    }
+  }
+
+  static create(options = {}) {
+    const {
+      chunkSize = 8 * 1024,
+      chunksPerSignature = 128,
+      liveDiscardWindow = Math.ceil(15 * 3500 * 1024 / chunkSize),
+      chunkAddressingMethod = ChunkAddressingMethod.Bin32,
+      contentIntegrityProtectionMethod = ContentIntegrityProtectionMethod.UnifiedMerkleTree,
+      merkleHashTreeFunction = MerkleHashTreeFunction.SHA256,
+      liveSignatureAlgorithm = LiveSignatureAlgorithm.ECDSAP256SHA256,
+    } = options;
+
+    return generateKeyPair(liveSignatureAlgorithm).then(({swarmId, privateKey}) => {
+      const encoding = createEncoding();
+      encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, this.chunkSize));
+      encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
+      encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId));
+
+      const contentIntegrity = createContentIntegrityVerifierFactory(
+        contentIntegrityProtectionMethod,
         createMerkleHashTreeFunction(merkleHashTreeFunction),
         createLiveSignatureVerifyFunction(liveSignatureAlgorithm, swarmId),
         createLiveSignatureSignFunction(liveSignatureAlgorithm, privateKey),
       );
-      integrity.setLiveDiscardWindow(liveDiscardWindow);
 
-      const encoding = createEncoding();
-      encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
-      encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
-      encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId));
+      const swarm = new Swarm(swarmId, encoding, contentIntegrity);
+      swarm.contentIntegrity.setLiveDiscardWindow(liveDiscardWindow);
+      swarm.availableChunks.setLiveDiscardWindow(liveDiscardWindow);
+      swarm.chunkBuffer.setLiveDiscardWindow(liveDiscardWindow);
 
-      // setInterval(() => {
-      //   const data = Buffer.alloc(1.25 * 1024 * 1024);
-      //   for (let i = 0; i < data.length; i ++) {
-      //     data[i] = Math.round(Math.random() * 255);
-      //   }
+      // TODO: Swarm.create?
+      swarm.protocolOptions = [
+        new encoding.VersionProtocolOption(),
+        new encoding.MinimumVersionProtocolOption(),
+        new encoding.SwarmIdentifierProtocolOption(swarmId.toBuffer()),
+        new encoding.ContentIntegrityProtectionMethodProtocolOption(contentIntegrityProtectionMethod),
+        new encoding.MerkleHashTreeFunctionProtocolOption(merkleHashTreeFunction),
+        new encoding.LiveSignatureAlgorithmProtocolOption(liveSignatureAlgorithm),
+        new encoding.ChunkAddressingMethodProtocolOption(chunkAddressingMethod),
+        new encoding.ChunkSizeProtocolOption(chunkSize),
+      ];
 
-      //   integrity.appendSubtree(data).then(() => {
-      //     console.log('yee');
-      //     // send HAVE
-      //   });
-      // }, 1000);
-    });
+      return swarm;
+    }).then(swarm => new Injector(swarm, chunkSize, chunksPerSignature));
   }
 }
 

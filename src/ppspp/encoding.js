@@ -202,12 +202,12 @@ const createEncoding = () => {
     }
 
     byteLength() {
-      return Buffer.byteLength(this.value) + 2;
+      return this.value.length + 2;
     }
 
     write(buffer, offset) {
-      buffer.writeUInt16BE(Buffer.byteLength(this.value));
-      buffer.write(this.value, offset + 2);
+      buffer.writeUInt16BE(this.value.length, offset);
+      this.value.copy(buffer, offset + 2);
     }
   }
 
@@ -474,8 +474,8 @@ const createEncoding = () => {
   }
 
   class HaveMessage extends AddressMessage {
-    constructor(address = new ChunkAddress()) {
-      super();
+    constructor(address) {
+      super(address);
       this.type = MessageTypes.HAVE;
     }
   }
@@ -540,15 +540,15 @@ const createEncoding = () => {
   }
 
   class RequestMessage extends AddressMessage {
-    constructor() {
-      super();
+    constructor(address) {
+      super(address);
       this.type = MessageTypes.REQUEST;
     }
   }
 
   class CancelMessage extends AddressMessage {
-    constructor() {
-      super();
+    constructor(address) {
+      super(address);
       this.type = MessageTypes.CANCEL;
     }
   }
@@ -664,6 +664,8 @@ const createEncoding = () => {
     }
 
     read(buffer) {
+      buffer = Buffer.from(buffer);
+
       let length = 0;
 
       this.channelId = buffer.readUInt32BE(0);

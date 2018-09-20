@@ -1,38 +1,30 @@
 const { EventEmitter } = require('events');
 const BitArray = require('../bitarray');
-// const { Buffer } = require('buffer');
-// const hirestime = require('../hirestime');
-// const LRU = require('lru-cache');
-// const crypto = require('crypto');
-// const arrayEqual = require('array-equal');
 const Address = require('./address');
-
-// const CHUNK_SIZE = 64000;
-// const NCHUNKS_PER_SIG = 16;
-
+const SwarmId = require('./swarmid');
 const {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
   createIntegrityHashFieldType,
   createEncoding,
 } = require('./encoding');
-
 const {
   MaxChannelId,
   ProtocolOptions,
   MessageTypes,
-  // ChunkAddressingMethod,
 } = require('./constants');
-
 const {
   createMerkleHashTreeFunction,
-  createLiveSignatureSignFunction,
   createLiveSignatureVerifyFunction,
   createContentIntegrityVerifierFactory,
 } = require('./integrity');
 
-class ChunkMap {
+const genericEncoding = createEncoding();
+
+class ChunkMap extends EventEmitter {
   constructor(liveDiscardWindow) {
+    super();
+
     this.liveDiscardWindow = liveDiscardWindow;
     this.values = new BitArray(liveDiscardWindow * 2);
   }
@@ -43,27 +35,59 @@ class ChunkMap {
     this.values.resize(liveDiscardWindow * 2);
   }
 
-  set({start, end}) {
-    this.values.setRange(start, end + 1);
+  set(address) {
+    this.values.setRange(address.start, address.end + 1);
+    this.emit('set', address);
+  }
+
+  get({bin}) {
+    return this.values.get(bin);
   }
 }
 
 class ChunkBuffer {
-  constructor() {
-    this.liveDiscardWindow = 0;
+  constructor(liveDiscardWindow) {
+    this.liveDiscardWindow = liveDiscardWindow;
+    this.chunks = [];
   }
 
   setLiveDiscardWindow(liveDiscardWindow) {
     this.liveDiscardWindow = liveDiscardWindow;
+    this.chunks = new Array(liveDiscardWindow);
+  }
+
+  set({start}, chunks) {
+    for (let i = 0; i < chunks.length; i ++) {
+      this.chunks[(start / 2 + i) % this.liveDiscardWindow] = chunks[i];
+    }
+  }
+
+  get({bin}) {
+    return this.chunks[(bin / 2) % this.liveDiscardWindow];
   }
 }
 
 class Swarm {
-  constructor(encoding = createEncoding()) {
+  constructor(
+    id,
+    encoding = createEncoding(),
+    contentIntegrity = null,
+    availableChunks = new ChunkMap(),
+    chunkBuffer = new ChunkBuffer(),
+  ) {
+    this.id = id;
     this.encoding = encoding;
-    this.availabilityMap = new ChunkMap();
-    this.chunkBuffer = new ChunkBuffer();
-    this.contentIntegrity = null;
+    this.contentIntegrity = contentIntegrity;
+    this.availableChunks = availableChunks;
+    this.chunkBuffer = chunkBuffer;
+
+    this.peers = {};
+
+    this.protocolOptions = [
+      new encoding.VersionProtocolOption(),
+      new encoding.MinimumVersionProtocolOption(),
+      new encoding.SwarmIdentifierProtocolOption(this.id.toBuffer()),
+    ];
   }
 
   setProtocolOptions({
@@ -73,15 +97,31 @@ class Swarm {
     [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
     [ProtocolOptions.ChunkSize]: chunkSize,
   }) {
+    console.log('setProtocolOptions', {
+      contentIntegrityProtectionMethod,
+      merkleHashTreeFunction,
+      liveSignatureAlgorithm,
+      chunkAddressingMethod,
+      chunkSize,
+    });
+    console.log('swarmId', this.id);
     this.encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
     this.encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
-    this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.publicKey));
+    this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.id));
 
     this.contentIntegrity = createContentIntegrityVerifierFactory(
       contentIntegrityProtectionMethod,
       createMerkleHashTreeFunction(merkleHashTreeFunction),
-      createLiveSignatureVerifyFunction(liveSignatureAlgorithm, this.publicKey),
+      createLiveSignatureVerifyFunction(liveSignatureAlgorithm, this.id),
     );
+  }
+
+  addPeer(peer) {
+    this.peers[peer.localId] = peer;
+  }
+
+  removePeer(peer) {
+    delete this.peers[peer.localId];
   }
 }
 
@@ -93,6 +133,7 @@ const PeerState = {
   DISCONNECTING: 5,
 };
 
+// TODO: disconnect inactive peers
 class Peer {
   constructor(swarm, channel, remoteId = 0, localId = Peer.createChannelId()) {
     this.swarm = swarm;
@@ -115,6 +156,11 @@ class Peer {
       [MessageTypes.CHOKE]: this.handleChokeMessage.bind(this),
       [MessageTypes.UNCHOKE]: this.handleUnchokeMessage.bind(this),
     };
+
+    this.handleAvailableDataSet = this.handleAvailableDataSet.bind(this);
+    swarm.availableChunks.on('set', this.handleAvailableDataSet);
+
+    this.swarm.addPeer(this);
   }
 
   static createChannelId() {
@@ -128,25 +174,36 @@ class Peer {
     messages.push(new encoding.HandshakeMessage(
       this.localId,
       [
-        new encoding.VersionProtocolOption(),
-        new encoding.MinimumVersionProtocolOption(),
-        new encoding.SwarmIdentifierProtocolOption(this.swarm.id),
-        new encoding.LiveDiscardWindowProtocolOption(6000),
+        ...this.swarm.protocolOptions,
         new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
       ],
     ));
 
-    if (this.swarm.hasData()) {
-      messages.push(new encoding.ChokeMessage());
-    }
+    // if (this.swarm.hasData()) {
+    //   messages.push(new encoding.ChokeMessage());
+    // }
 
     this.channel.send(new encoding.Datagram(this.remoteId, messages));
     this.state = PeerState.AWAITING_HANDSHAKE;
   }
 
+  close() {
+    this.swarm.removePeer(this);
+    this.swarm.availableChunks.removeEventListener('set', this.handleAvailableDataSet);
+  }
+
+  handleAvailableDataSet(address) {
+    const {encoding} = this.swarm;
+
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.HaveMessage(encoding.ChunkAddress.from(address))],
+    ));
+  }
+
   getContentIntegrityVerifier(address) {
     if (this.integrityVerifier === null) {
-      this.swarm.contentIntegrity.createVerifier(address);
+      this.integrityVerifier = this.swarm.contentIntegrity.createVerifier(address);
     }
     return this.integrityVerifier;
   }
@@ -162,71 +219,108 @@ class Peer {
       throw new Error('unsupported message type');
     }
 
-    console.log(MessageTypes.name(message.type), this.remoteId, message);
+    // console.log(MessageTypes.name(message.type), this.remoteId, message);
     handler(message);
   }
 
   handleHandshakeMessage(handshake) {
     const options = handshake.options.reduce((options, {type, value}) => ({...options, [type]: value}), {});
-    this.swarm.setProtocolOptions(options);
 
     const liveDiscardWindow = options[ProtocolOptions.LiveDiscardWindow];
     if (liveDiscardWindow !== undefined) {
       this.availableChunks.setLiveDiscardWindow(liveDiscardWindow);
     }
 
-    if (this.state === PeerState.AWAITING_HANDSHAKE) {
-      // we initialized the connection and were waiting for handshake memes...
-      return;
-    }
-
-    // we sent a handshake and this is the response
-    // - we are already in this swarm
-    // - we are joining this swarm for the first time
-    // we are receiving a handshake request
-    // - we are in this swarm
-    // - we are not in this swarm
-
     this.remoteId = handshake.channelId;
 
     const {encoding} = this.swarm;
-    const data = new encoding.Datagram(
-      this.remoteId,
-      [
-        new encoding.HandshakeMessage(
-          this.localId,
-          [
-            ...this.swarm.protocolOptions,
-            new encoding.LiveDiscardWindowProtocolOption(6000),
-            new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
-          ]
-        ),
-      ],
-    );
-    this.channel.send(data);
-    this.state = PeerState.READY;
+
+    if (this.state === PeerState.AWAITING_HANDSHAKE) {
+      this.swarm.setProtocolOptions(options);
+
+      // we initialized the connection and were waiting for handshake memes...
+      // - we are already in this swarm
+      // - we are joining this swarm for the first time
+
+      this.channel.send(new encoding.Datagram(
+        this.remoteId,
+        [
+          new encoding.HandshakeMessage(
+            this.localId,
+            [new encoding.LiveDiscardWindowProtocolOption(6000)],
+          ),
+        ],
+      ));
+
+      this.state = PeerState.READY;
+      return;
+    }
+
+    if (this.state === PeerState.CONNECTING) {
+      // we are receiving a handshake request
+
+      this.channel.send(new encoding.Datagram(
+        this.remoteId,
+        [
+          new encoding.HandshakeMessage(
+            this.localId,
+            [
+              ...this.swarm.protocolOptions,
+              new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
+            ],
+          ),
+        ],
+      ));
+
+      this.state = PeerState.READY;
+      return;
+    }
   }
 
   handleDataMessage(message) {
     const address = Address.from(message.address);
-    this.getContentIntegrityVerifier().verifyChunk(message.data)
+
+    this.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
-        this.swarm.chunkBuffer.insert(address, message.data);
+        this.swarm.chunkBuffer.set(address, message.data);
+        this.swarm.availableChunks.set(address);
 
         const {encoding} = this.swarm;
         this.channel.send(new encoding.Datagram(
           this.remoteId,
-          [new encoding.AckMessage(address)],
+          [new encoding.AckMessage(message.address)],
         ));
       })
-      .catch(() => {
+      .catch((err) => {
         // TODO: update reputation
+        console.log('verifier error', err);
       });
   }
 
-  handleHaveMessage({address}) {
-    this.availableChunks.set(Address.from(address));
-    this.swarm.addAvailableChunk(Address.from(address));
+  handleHaveMessage(message) {
+    const address = Address.from(message.address);
+
+    this.availableChunks.set(address);
+
+    // this.swarm.addAvailableChunk(address);
+    const {encoding} = this.swarm;
+
+    const messages = [];
+    const {start, end} = address;
+
+    for (let i = start; i <= end; i += 2) {
+      const address = new Address(i);
+      if (!this.swarm.availableChunks.get(address)) {
+        messages.push(new encoding.RequestMessage(encoding.ChunkAddress.from(address)));
+      }
+    }
+
+    if (message.length !== 0) {
+      this.channel.send(new encoding.Datagram(
+        this.remoteId,
+        messages,
+      ));
+    }
   }
 
   handleAckMessage({address}) {
@@ -237,20 +331,37 @@ class Peer {
 
   handleIntegrityMessage(message) {
     const address = Address.from(message.address);
-    this.getContentIntegrityVerifier(address).setHash(address, message.hash);
+    this.getContentIntegrityVerifier(address).setHash(address, message.hash.value);
   }
 
-  handleSignatureMessage(message) {
+  handleSignedIntegrityMessage(message) {
     const address = Address.from(message.address);
-    this.getContentIntegrityVerifier(address).setHashSignature(address, message.signature);
+    this.getContentIntegrityVerifier(address).setHashSignature(address, message.signature.value);
   }
 
   // TODO: throttling (request queue/prioritization)
   // TODO: retransmission settings
   // TODO: save sent time for perf
   // TODO: push model?
-  handleRequestMessage({address}) {
-    const chunk = this.swarm.chunks.get(Address.from(address));
+  handleRequestMessage(message) {
+    const address = Address.from(message.address);
+    this.sendChunk(address);
+  }
+
+  handleCancelMessage({address}) {
+    // TODO: cancel retransmit...
+  }
+
+  handleChokeMessage() {
+    this.state = PeerState.CHOKED;
+  }
+
+  handleUnchokeMessage() {
+    this.state = PeerState.READY;
+  }
+
+  sendChunk(address) {
+    const chunk = this.swarm.chunkBuffer.get(address);
     if (chunk === undefined) {
       return;
     }
@@ -259,7 +370,7 @@ class Peer {
     const messages = [];
 
     // TODO: omit signatures for bins the peer has already acked
-    this.swarm.contentIntegrity.getConstituentSignatures(Address.from(address))
+    this.swarm.contentIntegrity.getConstituentSignatures(address)
       .reverse()
       .forEach(({bin, signature}, i) => {
         const address = encoding.ChunkAddress.from(new Address(bin));
@@ -278,21 +389,44 @@ class Peer {
         }
       });
 
-    messages.push(new encoding.DataMessage(address, chunk));
+    messages.push(new encoding.DataMessage(encoding.ChunkAddress.from(address), chunk));
 
     this.channel.send(new encoding.Datagram(this.remoteId, messages));
   }
+}
 
-  handleCancelMessage({address}) {
-    // TODO: cancel retransmit...
+class SwarmMap extends EventEmitter {
+  constructor() {
+    super();
+    this.swarms = {};
   }
 
-  handleChokeMessage() {
-    this.state = PeerState.CHOKED;
+  insert(swarm) {
+    const id = SwarmMap.swarmIdToKey(swarm.id);
+    if (this.swarms[id] === undefined) {
+      this.swarms[id] = swarm;
+      this.emit('insert', swarm);
+    }
   }
 
-  handleUnchokeMessage() {
-    this.state = PeerState.READY;
+  remove(swarm) {
+    const id = SwarmMap.swarmIdToKey(swarm.id);
+    if (this.swarms[id] !== undefined) {
+      delete this.swarms[id];
+      this.emit('remove', swarm);
+    }
+  }
+
+  get(swarmId) {
+    return this.swarms[SwarmMap.swarmIdToKey(swarmId)];
+  }
+
+  toArray() {
+    return Object.values(this.swarms);
+  }
+
+  static swarmIdToKey(swarmId) {
+    return swarmId.toBuffer().toString('base64');
   }
 }
 
@@ -300,90 +434,110 @@ class Client {
   constructor() {
     this.channels = [];
 
-    this.genericEncoding = createEncoding();
-    this.swarms = {};
+    this.swarms = new SwarmMap();
   }
 
   publishSwarm(swarm) {
-    this.swarms[swarm.id.toString('base64')] = swarm;
+    console.log('published swarm:', swarm.id.toBuffer().toString('base64'));
+    this.swarms.insert(swarm);
   }
 
-  addChannel(channel) {
+  unpublishSwarm(swarm) {
+    this.swarms.remove(swarm);
+  }
+
+  joinSwarm(swarmId) {
+    this.swarms.insert(new Swarm(swarmId));
+  }
+
+  createChannel(wrtcChannel) {
+    const channel = new Channel(wrtcChannel, this.swarms);
     this.channels.push(channel);
-
-    const peers = {};
-
-    channel.once('open', () => {
-      Object.values(this.swarms).forEach(swarm => {
-        const peer = new Peer(swarm, channel);
-        peers[peer.id] = peer;
-        peer.init();
-      });
-    });
-
-    channel.once('close', () => {
-      Object.values(peers).forEach(peer => peer.close());
-    });
-
-    channel.on('data', (event) => {
-      let data = new this.genericEncoding.Datagram();
-      data.read(event.data);
-
-      let peer = peers[data.channelId];
-      if (peer === undefined) {
-        if (data.channelId !== 0) {
-          return;
-        }
-
-        const handshake = data.messages.next();
-        if (handshake === undefined || handshake.type !== MessageTypes.HANDSHAKE) {
-          return;
-        }
-        const swarmId = handshake.options.find(({type}) => type === ProtocolOptions.SwarmIdentifier);
-        if (swarmId === undefined) {
-          return;
-        }
-        const swarm = this.swarms[swarmId.value.toString('base64')];
-        if (swarm === undefined) {
-          return;
-        }
-
-        peer = new Peer(swarm, channel);
-        peers[peer.id] = peer;
-      }
-
-      data = new peer.swarm.encoding.Datagram();
-      data.read(event.data);
-      peer.handleData(data);
-    });
   }
 }
 
 class Channel extends EventEmitter {
-  constructor(channel) {
+  constructor(channel, swarms) {
     super();
 
     this.channel = channel;
+    this.swarms = swarms;
+    this.peers = {};
+
     this.channel.onopen = this.handleOpen.bind(this);
     this.channel.onmessage = this.handleMessage.bind(this);
     this.channel.onclose = this.handleClose.bind(this);
     this.channel.onerror = err => console.log('channel error:', err);
+
+    this.handleSwarmInsert = this.handleSwarmInsert.bind(this);
+    // this.handleSwarmRemove = this.handleSwarmRemove.bind(this);
+    this.swarms.on('insert', this.handleSwarmInsert);
+    // this.swarms.on('remove', this.handleSwarmRemove);
   }
 
   handleOpen() {
-    this.emit('open');
+    this.swarms.toArray().forEach(swarm => {
+      // const peer = new Peer(swarm, this);
+      // this.peers[peer.localId] = peer;
+      // peer.init();
+    });
   }
 
   handleMessage(event) {
-    this.emit('data', event);
+    let data = new genericEncoding.Datagram();
+    data.read(event.data);
+
+    let peer = this.peers[data.channelId];
+    if (peer === undefined) {
+      if (data.channelId !== 0) {
+        return;
+      }
+
+      const handshake = data.messages.next();
+      if (handshake === undefined || handshake.type !== MessageTypes.HANDSHAKE) {
+        return;
+      }
+      const swarmId = handshake.options.find(({type}) => type === ProtocolOptions.SwarmIdentifier);
+      if (swarmId === undefined) {
+        return;
+      }
+      const swarm = this.swarms.get(SwarmId.from(swarmId.value));
+      if (swarm === undefined) {
+        return;
+      }
+
+      peer = new Peer(swarm, this);
+      this.peers[peer.localId] = peer;
+    }
+
+    data = new peer.swarm.encoding.Datagram();
+    data.read(event.data);
+    peer.handleData(data);
   }
 
   handleClose() {
-    this.emit('close');
+    Object.values(this.peers).forEach(peer => peer.close());
   }
 
   send(data) {
+    // console.log('send', data.messages.values);
     this.channel.send(data.toBuffer());
+  }
+
+  handleSwarmInsert(swarm) {
+    const peer = new Peer(swarm, this);
+    this.peers[peer.localId] = peer;
+    peer.init();
+
+    const {swarms} = this;
+    function handleRemove(removedSwarm) {
+      if (removedSwarm === swarm) {
+        peer.close();
+        swarms.removeEventListener('remove', handleRemove);
+      }
+    }
+
+    swarms.on('remove', handleRemove);
   }
 }
 

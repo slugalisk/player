@@ -43,8 +43,8 @@ bootstrap.on('bootstrap', ({data, conn}) => {
   const ppsppClient = new ppspp.Client();
 
   const bootstrapId = hexToUint8Array(data.bootstrapId);
-  dhtClient.addChannel(new dht.Channel(bootstrapId, client.createDataChannel('dht')));
-  ppsppClient.addChannel(new ppspp.Channel(client.createDataChannel('ppspp')));
+  dhtClient.createChannel(bootstrapId, client.createDataChannel('dht'));
+  ppsppClient.createChannel(client.createDataChannel('ppspp'));
 
   client.init();
 
@@ -55,14 +55,14 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 
     client.once('open', () => sub.close());
 
-    dhtClient.addChannel(new dht.Channel(id, client.createDataChannel('dht')));
-    ppsppClient.addChannel(new ppspp.Channel(client.createDataChannel(
+    dhtClient.createChannel(id, client.createDataChannel('dht'));
+    ppsppClient.createChannel(client.createDataChannel(
       'ppspp',
       {
         ordered: false,
         protocol: 'ppspp',
       },
-    )));
+    ));
 
     dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
   }));
@@ -79,14 +79,14 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 
     client.on('datachannel', ({channel}) => {
       if (channel.label === 'dht') {
-        dhtClient.addChannel(new dht.Channel(id, channel));
+        dhtClient.createChannel(id, channel);
       } else if (channel.label === 'ppspp') {
-        ppsppClient.addChannel(new ppspp.Channel(channel));
+        ppsppClient.createChannel(channel);
       }
     });
 
     callback();
   });
-})
 
-ReactDOM.render(<App />, document.getElementById('root'));
+  ReactDOM.render(<App ppsppClient={ppsppClient} />, document.getElementById('root'));
+})
