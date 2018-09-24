@@ -1,17 +1,16 @@
-const invert = require('lodash.invert');
 const URLSafeBase64 = require('urlsafe-base64');
 const SwarmId = require('./swarmid');
 const {ProtocolOptions} = require('./constants');
 
 const protocolOptionToKey = {
-  [ProtocolOptions.ContentIntegrityProtectionMethod]: 'cipm',
-  [ProtocolOptions.MerkleHashTreeFunction]: 'mhtf',
-  [ProtocolOptions.LiveSignatureAlgorithm]: 'lsa',
-  [ProtocolOptions.ChunkAddressingMethod]: 'cam',
-  [ProtocolOptions.ChunkSize]: 'cs',
+  [ProtocolOptions.ContentIntegrityProtectionMethod]: 'x.im',
+  [ProtocolOptions.MerkleHashTreeFunction]: 'x.hf',
+  [ProtocolOptions.LiveSignatureAlgorithm]: 'x.sa',
+  [ProtocolOptions.ChunkAddressingMethod]: 'x.am',
+  [ProtocolOptions.ChunkSize]: 'x.cs',
 }
-const keyToProtocolOption = invert(protocolOptionToKey);
 
+// TODO: as (https://en.wikipedia.org/wiki/Magnet_URI_scheme#Normal_(as)) to m3u8 url?
 class URI {
   constructor(swarmId, protocolOptions) {
     this.swarmId = swarmId;
@@ -23,23 +22,32 @@ class URI {
     const protocolOptions = Object.entries(this.protocolOptions)
       .map(([protocolOption, value]) => `${protocolOptionToKey[protocolOption]}=${value}`)
       .join('&');
-    return `ppspp://${swarmId}?${protocolOptions}`;
+    return `magnet:?xt=urn:ppspp:${swarmId}&${protocolOptions}`;
   }
 
   static parse(uriString) {
-    if (uriString.indexOf('ppspp://') !== 0) {
-      throw new Error('invalid protocol expected ppspp://');
+    if (uriString.indexOf('magnet:') !== 0) {
+      throw new Error('invalid uri: expected magnet');
     }
 
-    const queryIndex = uriString.indexOf('?');
-    const swarmId = SwarmId.from(URLSafeBase64.decode(uriString.substring(8, queryIndex)));
-    const protocolOptions = uriString.substring(queryIndex + 1)
+    const args = uriString.substring(8)
       .split('&')
-      .reduce((options, queryEntry) => {
-        const [key, value] = queryEntry.split('=');
-        options[keyToProtocolOption[key]] = parseFloat(value);
-        return options;
+      .map(queryEntry => queryEntry.split('='));
+
+    const protocolOptions = Object.entries(protocolOptionToKey)
+      .reduce((protocolOptions, [protocolOption, key]) => {
+        const arg = args.find(([argKey]) => argKey === key);
+        if (arg === undefined) {
+          throw new Error(`invalid uri: missing ${key}`);
+        }
+        return {...protocolOptions, [protocolOption]: parseFloat(arg[1])};
       }, {});
+
+    const xt = args.find(([key, value]) => key === 'xt' && value.startsWith('urn:ppspp:'));
+    if (xt === undefined) {
+      throw new Error('invalid uri: missing suitable xt');
+    }
+    const swarmId = SwarmId.from(URLSafeBase64.decode(xt[1].substring(10)));
 
     return new URI(swarmId, protocolOptions);
   }
