@@ -88,7 +88,7 @@ class SwarmId {
   }
 
   static from(values) {
-    if (ArrayBuffer.isView(values) || typeof values === 'string') {
+    if (ArrayBuffer.isView(values)) {
       const swarmId = Object.create(SwarmId.prototype);
       swarmId.read(Buffer.from(values));
       return swarmId;

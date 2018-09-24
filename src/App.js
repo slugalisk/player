@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import SwarmId from './ppspp/swarmid';
+import URI from './ppspp/uri';
 import './App.css';
 
 class App extends Component {
@@ -10,14 +10,12 @@ class App extends Component {
   }
 
   onJoinSubmit = (e) => {
-    // DTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJITEKj0LLs5hOjmd9BGq2XCO5Mhyqx8XpU_-4E5SNqo3e4wiQfmTqvDys5l15juWljDtPAzd0y556gADZRuA0E
-
     e.preventDefault();
 
     console.log(this.input.current.value);
-    const swarmId = SwarmId.from(Buffer.from(this.input.current.value, 'base64'));
-    console.log('joining', swarmId);
-    this.props.ppsppClient.joinSwarm(swarmId);
+    const uri = URI.parse(this.input.current.value);
+    console.log('joining', uri);
+    this.props.ppsppClient.joinSwarm(uri);
   }
 
   render() {

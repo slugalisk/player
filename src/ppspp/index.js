@@ -2,6 +2,8 @@ const { EventEmitter } = require('events');
 const BitArray = require('../bitarray');
 const Address = require('./address');
 const SwarmId = require('./swarmid');
+const hirestime = require('../hirestime');
+const wfq = require('../wfq');
 const {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
@@ -16,28 +18,29 @@ const {
 const {
   createMerkleHashTreeFunction,
   createLiveSignatureVerifyFunction,
+  createLiveSignatureSignFunction,
   createContentIntegrityVerifierFactory,
 } = require('./integrity');
 
 const genericEncoding = createEncoding();
 
-class ChunkMap extends EventEmitter {
-  constructor(liveDiscardWindow) {
-    super();
+const BUFFER_SIZE = 1e8;
+const MAX_UPLOAD_RATE = 1e6;
 
-    this.liveDiscardWindow = liveDiscardWindow;
-    this.values = new BitArray(liveDiscardWindow * 2);
+class AvailabilityMap {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.values = new BitArray(capacity * 2);
   }
 
   // TODO: ignore very large discard windows from remote peers...
-  setLiveDiscardWindow(liveDiscardWindow) {
-    this.liveDiscardWindow = liveDiscardWindow;
-    this.values.resize(liveDiscardWindow * 2);
+  setCapacity(capacity) {
+    this.capacity = capacity;
+    this.values.resize(capacity * 2);
   }
 
   set(address) {
     this.values.setRange(address.start, address.end + 1);
-    this.emit('set', address);
   }
 
   get({bin}) {
@@ -45,83 +48,472 @@ class ChunkMap extends EventEmitter {
   }
 }
 
-class ChunkBuffer {
-  constructor(liveDiscardWindow) {
-    this.liveDiscardWindow = liveDiscardWindow;
-    this.chunks = [];
+class BinRing {
+  constructor(capacity) {
+    this.setCapacity(capacity);
+    this.endBin = 0;
   }
 
-  setLiveDiscardWindow(liveDiscardWindow) {
-    this.liveDiscardWindow = liveDiscardWindow;
-    this.chunks = new Array(liveDiscardWindow);
+  setCapacity(capacity) {
+    this.capacity = capacity;
+    this.values = new Array(capacity);
+
+    for (let i = 0; i < capacity; i ++) {
+      this.values[i] = this.createEmptyValue(i);
+    }
   }
 
-  set({start}, chunks) {
-    for (let i = 0; i < chunks.length; i ++) {
-      this.chunks[(start / 2 + i) % this.liveDiscardWindow] = chunks[i];
+  advanceEndBin(bin) {
+    for (let i = this.endBin; i <= bin; i += 2) {
+      const index = (i / 2) % this.capacity;
+      this.values[index] = this.createEmptyValue(i, this.values[index]);
+    }
+    this.endBin = bin + 2;
+  }
+
+  createEmptyValue() {
+    return undefined;
+  }
+
+  set({bin, start, end}, value) {
+    if (Array.isArray(value)) {
+      this.advanceEndBin(end);
+      for (let i = 0; i < value.length; i ++) {
+        this.values[(start / 2 + i) % this.capacity] = value[i];
+      }
+    } else {
+      this.advanceEndBin(bin);
+      this.values[(bin / 2) % this.capacity] = value;
     }
   }
 
   get({bin}) {
-    return this.chunks[(bin / 2) % this.liveDiscardWindow];
+    if (bin < this.endBin - this.capacity * 2 || bin >= this.endBin) {
+      return undefined;
+    }
+    return this.values[(bin / 2) % this.capacity];
+  }
+
+  forEach(callback) {
+    for (let i = this.endBin - this.capacity * 2; i < this.endBin; i += 2) {
+      callback(this.values[(i / 2) % this.capacity], i);
+    }
+  }
+}
+
+class EMA {
+  constructor(alpha) {
+    this.mean = 0;
+    this.alpha = alpha;
+    this.weight = 1;
+  }
+
+  update(value) {
+    this.mean = this.mean * this.alpha + (1 - this.alpha) * value;
+    this.weight *= this.alpha;
+  }
+
+  value() {
+    return this.mean / (1 - this.weight);
+  }
+}
+
+class RateMeter {
+  constructor(windowMs, sampleWindowMs = 100) {
+    this.firstSampleWindow = Math.floor(Date.now() / sampleWindowMs)
+    this.lastSampleWindow = this.firstSampleWindow;
+    this.windowMs = windowMs;
+    this.sampleWindowMs = sampleWindowMs;
+    this.sum = 0;
+    this.values = new Array(windowMs / sampleWindowMs);
+
+    this.values.fill(0);
+  }
+
+  update(value) {
+    const sampleWindow = Math.floor(Date.now() / this.sampleWindowMs);
+
+    for (let i = this.lastSampleWindow + 1; i <= sampleWindow; i += this.sampleWindowMs) {
+      const index = i % this.values.length;
+      this.sum -= this.values[index];
+      this.values[index] = 0;
+    }
+    this.lastSampleWindow = sampleWindow;
+
+    this.sum += value;
+    this.values[sampleWindow % this.values.length] += value;
+  }
+
+  value() {
+    const accumulatedMs = Math.min(
+      (this.lastSampleWindow - this.firstSampleWindow) * this.sampleWindowMs,
+      this.windowMs,
+    );
+    return this.sum / accumulatedMs;
+  }
+}
+
+class ChunkRateMeter extends RateMeter {
+  constructor(windowMs = 15000) {
+    super(windowMs);
+    this.lastEndBin = 0;
+  }
+
+  update({start, end}) {
+    if (this.lastHeadBin === 0) {
+      super.update((end - start) / 2);
+    } else if (end > this.lastEndBin) {
+      super.update((end - this.lastEndBin) / 2);
+      this.lastEndBin = end;
+    }
+  }
+}
+
+class RequestFlow extends wfq.Flow {
+  constructor(id) {
+    super();
+    this.id = id;
+    this.queueSize = 0;
+  }
+
+  computeWeight(queue) {
+    return this.queueSize / queue.totalQueueSize;
+  }
+}
+
+class RequestQueue extends wfq.Queue {
+  constructor(rate) {
+    super(rate);
+    this.totalQueueSize = 0;
+  }
+
+  enqueue(flow, size, value) {
+    this.totalQueueSize += size;
+    flow.queueSize += size;
+    super.enqueue(flow, size, value);
+  }
+
+  cancel(flow, filter) {
+    flow.queue = flow.queue.filter(task => {
+      const remove = filter(task.value);
+
+      if (remove) {
+        this.totalQueueSize -= task.size;
+        flow.queueSize -= task.size;
+      }
+
+      return !remove;
+    });
+  }
+
+  dequeue() {
+    const result = super.dequeue();
+    if (result === null) {
+      return null;
+    }
+
+    this.totalQueueSize -= result.task.size;
+    result.flow.queueSize -= result.task.size;
+
+    return result;
+  }
+}
+
+class SchedulerChunkState {
+  constructor(bin) {
+    this.bin = bin;
+    this.reset();
+  }
+
+  reset() {
+    this.availableCopies = 0;
+    this.requestTime = [0, 0];
+    this.requestPeerId = 0;
+
+    this.requested = false;
+    this.received = false;
+    this.verified = false;
+  }
+}
+
+class SchedulerChunkMap extends BinRing {
+  createEmptyValue(bin, value) {
+    if (value === undefined) {
+      return new SchedulerChunkState(bin);
+    }
+
+    // put the peer map here and when we advance the bin meme update
+    // the availability map here
+
+    value.reset();
+    return value;
+  }
+}
+
+class SchedulerPeerState {
+  constructor(peer, requestFlow) {
+    this.peer = peer;
+    this.requestFlow = requestFlow;
+    this.availableChunks = new AvailabilityMap();
+    this.requestLatency = new EMA(0.05);
+    this.sendLatency = new EMA(0.05);
+
+    this.timeouts = 0;
+    this.validChunks = 0;
+    this.invalidChunks = 0;
+  }
+}
+
+class Scheduler {
+  constructor(chunkSize, clientOptions) {
+    const {
+      liveDiscardWindow,
+      uploadRateLimit,
+    } = clientOptions;
+
+    this.chunkSize = chunkSize;
+
+    // where are we in the buffer
+
+    // how rare is a chunk
+    // how urgently is a chunk needed
+
+    // high/mid/low priority time bands
+
+    // high performance/reliability peers
+    // expected performance per peer
+
+    // request timeout/cancel
+    // send timeout/cancel?
+
+    this.peerStates = {};
+    this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
+    this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
+    this.peerCount = 0;
+    // this.windowStart = 0;
+    // this.windowEnd = 0;
+    this.chunkRate = new ChunkRateMeter();
+    this.requestedChunks = [];
+    // average stream bit rate
+    // position in available window
+    // position in theoretical window
+
+    // how do we know what range we want urgently...? we sort of need to
+    // know the video bitrate...
+
+    // do we just want to look at have range * chunk size / time?
+
+    this.finishedUpToBin = 0;
+    this.lastAvailableBin = 0;
+
+    // minimum needed bin
+
+    this.requestQueue = new RequestQueue(uploadRateLimit / 1000);
+  }
+
+  start() {
+    this.updateIvl = setInterval(this.update.bind(this), 1000);
+  }
+
+  stop() {
+    clearInterval(this.updateIvl);
+  }
+
+  scoreBin(bin) {
+
+  }
+
+  update() {
+    // this.chunkStates.forEach((chunk, bin) => console.log({chunk, bin}));
+
+    // how far back do we need to be from the head to absorb jitter?
+
+
+    let totalSize = 0;
+    // eslint-disable-next-line
+    while (true) {
+      const result = this.requestQueue.dequeue();
+      if (result === null) {
+        break;
+      }
+
+      const {
+        flow: {id: peerId},
+        task: {
+          size,
+          value: address
+        },
+      } = result;
+
+      for (let i = address.start; i <= address.end; i += 2) {
+        this.peerStates[peerId].peer.sendChunk(new Address(i));
+      }
+
+      totalSize += size;
+
+      // sum sent bytes and break when we hit 10ms quota
+    }
+
+    if (totalSize > 0) {
+      console.log(totalSize);
+    }
+  }
+
+  reschedule(address) {
+
+  }
+
+  requestSomething() {
+    // do we have urgently needed chunks that have not yet been requested?
+    // - request them from TOP PEERS
+
+    // ...some window size
+  }
+
+  addPeer(peer) {
+    const {localId} = peer;
+
+    const requestFlow = new RequestFlow(localId);
+    this.requestQueue.addFlow(requestFlow);
+
+    this.peerStates[localId] = new SchedulerPeerState(peer, requestFlow);
+
+    if (++ this.peerCount === 1) {
+      this.start();
+    }
+  }
+
+  removePeer({localId}) {
+    delete this.peerStates[localId];
+
+    if (-- this.peerCount === 0) {
+      this.stop();
+    }
+  }
+
+  getPeerState({localId}) {
+    return this.peerStates[localId];
+  }
+
+  setLiveDiscardWindow(peer, liveDiscardWindow) {
+    console.log({liveDiscardWindow});
+    this.getPeerState(peer).availableChunks.setCapacity(liveDiscardWindow);
+  }
+
+  markChunkReceived({localId}, address) {
+    // const chunk = this.chunkStates.get(address);
+    // if (chunk.requestedPeerId === localId) {
+    //   this.peerStates[localId].requestLatency.update(hirestime.since(chunk.requestTime));
+    // }
+
+    // chunk.received = true;
+  }
+
+  markChunkVerified({localId}, address) {
+    this.chunkStates.get(address).verified = true;
+    this.peerStates[localId].validChunks ++;
+
+    // this.chunkStates.advanceEndBin(address.end);
+
+    this.chunkRate.update(address);
+
+    Object.values(this.peerStates).forEach(({availableChunks, peer}) => {
+      if (!availableChunks.get(address)) {
+        peer.sendHave(address);
+      }
+    });
+  }
+
+  markChunkRejected({localId}, address) {
+    this.reschedule(address);
+    this.peerStates[localId].invalidChunks ++;
+  }
+
+  markChunkAvailable({localId}, address) {
+    this.peerStates[localId].availableChunks.set(address);
+
+    if (typeof window !== 'undefined') {
+      this.peerStates[localId].peer.sendRequest(address);
+    }
+  }
+
+  markChunksLoaded(address) {
+    this.chunkStates.advanceEndBin(address.end);
+
+    Object.values(this.peerStates).forEach(({peer}) => peer.sendHave(address));
+  }
+
+  updateDelayStats({localId}, timestamp) {
+    this.peerStates[localId].sendLatency.update(hirestime.since(timestamp));
+  }
+
+  enqueueRequest({localId}, address) {
+    this.requestQueue.enqueue(
+      this.peerStates[localId].requestFlow,
+      this.chunkSize * (address.end - address.start + 1),
+      address,
+    );
+  }
+
+  cancelRequest({localId}, address) {
+    this.requestQueue.cancel(
+      this.peerStates[localId].requestFlow,
+      ({bin}) => address.containsBin(bin),
+    );
   }
 }
 
 class Swarm {
-  constructor(
-    id,
-    encoding = createEncoding(),
-    contentIntegrity = null,
-    availableChunks = new ChunkMap(),
-    chunkBuffer = new ChunkBuffer(),
-  ) {
-    this.id = id;
-    this.encoding = encoding;
-    this.contentIntegrity = contentIntegrity;
-    this.availableChunks = availableChunks;
-    this.chunkBuffer = chunkBuffer;
+  constructor(uri, clientOptions) {
+    const {swarmId} = uri;
+    const {
+      [ProtocolOptions.ContentIntegrityProtectionMethod]: contentIntegrityProtectionMethod,
+      [ProtocolOptions.MerkleHashTreeFunction]: merkleHashTreeFunction,
+      [ProtocolOptions.LiveSignatureAlgorithm]: liveSignatureAlgorithm,
+      [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
+      [ProtocolOptions.ChunkSize]: chunkSize,
+    } = uri.protocolOptions;
+    const {
+      liveDiscardWindow,
+      privateKey,
+    } = clientOptions;
 
-    this.peers = {};
+    this.uri = uri;
 
-    this.protocolOptions = [
-      new encoding.VersionProtocolOption(),
-      new encoding.MinimumVersionProtocolOption(),
-      new encoding.SwarmIdentifierProtocolOption(this.id.toBuffer()),
-    ];
-  }
+    this.encoding = createEncoding(
+      createChunkAddressFieldType(chunkAddressingMethod, chunkSize),
+      createIntegrityHashFieldType(merkleHashTreeFunction),
+      createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId),
+    );
 
-  setProtocolOptions({
-    [ProtocolOptions.ContentIntegrityProtectionMethod]: contentIntegrityProtectionMethod,
-    [ProtocolOptions.MerkleHashTreeFunction]: merkleHashTreeFunction,
-    [ProtocolOptions.LiveSignatureAlgorithm]: liveSignatureAlgorithm,
-    [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
-    [ProtocolOptions.ChunkSize]: chunkSize,
-  }) {
-    console.log('setProtocolOptions', {
-      contentIntegrityProtectionMethod,
-      merkleHashTreeFunction,
-      liveSignatureAlgorithm,
-      chunkAddressingMethod,
-      chunkSize,
-    });
-    console.log('swarmId', this.id);
-    this.encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
-    this.encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
-    this.encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, this.id));
-
+    const liveSignatureSignFunction = privateKey !== undefined
+      ? createLiveSignatureSignFunction(liveSignatureAlgorithm, privateKey)
+      : undefined;
     this.contentIntegrity = createContentIntegrityVerifierFactory(
       contentIntegrityProtectionMethod,
       createMerkleHashTreeFunction(merkleHashTreeFunction),
-      createLiveSignatureVerifyFunction(liveSignatureAlgorithm, this.id),
+      createLiveSignatureVerifyFunction(liveSignatureAlgorithm, swarmId),
+      liveSignatureSignFunction,
     );
+
+    this.chunkBuffer = new BinRing(liveDiscardWindow);
+    this.scheduler = new Scheduler(chunkSize, clientOptions);
+
+    this.protocolOptions = [
+      new this.encoding.VersionProtocolOption(),
+      new this.encoding.MinimumVersionProtocolOption(),
+      new this.encoding.SwarmIdentifierProtocolOption(swarmId.toBuffer()),
+      new this.encoding.ContentIntegrityProtectionMethodProtocolOption(contentIntegrityProtectionMethod),
+      new this.encoding.MerkleHashTreeFunctionProtocolOption(merkleHashTreeFunction),
+      new this.encoding.LiveSignatureAlgorithmProtocolOption(liveSignatureAlgorithm),
+      new this.encoding.ChunkAddressingMethodProtocolOption(chunkAddressingMethod),
+      new this.encoding.ChunkSizeProtocolOption(chunkSize),
+      new this.encoding.LiveDiscardWindowProtocolOption(liveDiscardWindow),
+    ];
   }
 
-  addPeer(peer) {
-    this.peers[peer.localId] = peer;
-  }
-
-  removePeer(peer) {
-    delete this.peers[peer.localId];
+  verifyProtocolOptions(options) {
+    // TODO
   }
 }
 
@@ -141,7 +533,6 @@ class Peer {
     this.remoteId = remoteId;
     this.localId = localId;
     this.state = PeerState.CONNECTING;
-    this.availableChunks = new ChunkMap();
     this.integrityVerifier = null;
 
     this.handlers = {
@@ -157,10 +548,10 @@ class Peer {
       [MessageTypes.UNCHOKE]: this.handleUnchokeMessage.bind(this),
     };
 
-    this.handleAvailableDataSet = this.handleAvailableDataSet.bind(this);
-    swarm.availableChunks.on('set', this.handleAvailableDataSet);
+    // this.handleAvailableDataSet = this.handleAvailableDataSet.bind(this);
+    // swarm.availableChunks.on('set', this.handleAvailableDataSet);
 
-    this.swarm.addPeer(this);
+    this.swarm.scheduler.addPeer(this);
   }
 
   static createChannelId() {
@@ -188,17 +579,8 @@ class Peer {
   }
 
   close() {
-    this.swarm.removePeer(this);
-    this.swarm.availableChunks.removeEventListener('set', this.handleAvailableDataSet);
-  }
-
-  handleAvailableDataSet(address) {
-    const {encoding} = this.swarm;
-
-    this.channel.send(new encoding.Datagram(
-      this.remoteId,
-      [new encoding.HaveMessage(encoding.ChunkAddress.from(address))],
-    ));
+    this.swarm.scheduler.removePeer(this);
+    // this.swarm.availableChunks.removeEventListener('set', this.handleAvailableDataSet);
   }
 
   getContentIntegrityVerifier(address) {
@@ -228,36 +610,15 @@ class Peer {
 
     const liveDiscardWindow = options[ProtocolOptions.LiveDiscardWindow];
     if (liveDiscardWindow !== undefined) {
-      this.availableChunks.setLiveDiscardWindow(liveDiscardWindow);
+      this.swarm.scheduler.setLiveDiscardWindow(this, liveDiscardWindow);
     }
+
+    this.swarm.verifyProtocolOptions(options);
 
     this.remoteId = handshake.channelId;
 
-    const {encoding} = this.swarm;
-
-    if (this.state === PeerState.AWAITING_HANDSHAKE) {
-      this.swarm.setProtocolOptions(options);
-
-      // we initialized the connection and were waiting for handshake memes...
-      // - we are already in this swarm
-      // - we are joining this swarm for the first time
-
-      this.channel.send(new encoding.Datagram(
-        this.remoteId,
-        [
-          new encoding.HandshakeMessage(
-            this.localId,
-            [new encoding.LiveDiscardWindowProtocolOption(6000)],
-          ),
-        ],
-      ));
-
-      this.state = PeerState.READY;
-      return;
-    }
-
     if (this.state === PeerState.CONNECTING) {
-      // we are receiving a handshake request
+      const {encoding} = this.swarm;
 
       this.channel.send(new encoding.Datagram(
         this.remoteId,
@@ -271,62 +632,42 @@ class Peer {
           ),
         ],
       ));
-
-      this.state = PeerState.READY;
-      return;
     }
+
+    this.state = PeerState.READY;
   }
 
   handleDataMessage(message) {
+    // TODO: handle multiple data messages in the same datagram...?
     const address = Address.from(message.address);
+
+    this.swarm.scheduler.markChunkReceived(this, address);
+
+    const {encoding} = this.swarm;
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.AckMessage(message.address, message.timestamp)],
+    ));
 
     this.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
+        this.swarm.scheduler.markChunkVerified(this, address);
+
         this.swarm.chunkBuffer.set(address, message.data);
         this.swarm.availableChunks.set(address);
-
-        const {encoding} = this.swarm;
-        this.channel.send(new encoding.Datagram(
-          this.remoteId,
-          [new encoding.AckMessage(message.address)],
-        ));
       })
       .catch((err) => {
-        // TODO: update reputation
-        console.log('verifier error', err);
+        this.swarm.scheduler.markChunkRejected(this, address);
       });
   }
 
   handleHaveMessage(message) {
-    const address = Address.from(message.address);
-
-    this.availableChunks.set(address);
-
-    // this.swarm.addAvailableChunk(address);
-    const {encoding} = this.swarm;
-
-    const messages = [];
-    const {start, end} = address;
-
-    for (let i = start; i <= end; i += 2) {
-      const address = new Address(i);
-      if (!this.swarm.availableChunks.get(address)) {
-        messages.push(new encoding.RequestMessage(encoding.ChunkAddress.from(address)));
-      }
-    }
-
-    if (message.length !== 0) {
-      this.channel.send(new encoding.Datagram(
-        this.remoteId,
-        messages,
-      ));
-    }
+    this.swarm.scheduler.markChunkAvailable(this, Address.from(message.address));
   }
 
-  handleAckMessage({address}) {
-    this.availableChunks.set(Address.from(address));
-    // perf timing?
-    // clear retransmit timer?
+  handleAckMessage(message) {
+    this.swarm.scheduler.markChunkAvailable(this, Address.from(message.address));
+    this.swarm.scheduler.updateDelayStats(this, message.delaySample.value);
   }
 
   handleIntegrityMessage(message) {
@@ -339,17 +680,12 @@ class Peer {
     this.getContentIntegrityVerifier(address).setHashSignature(address, message.signature.value);
   }
 
-  // TODO: throttling (request queue/prioritization)
-  // TODO: retransmission settings
-  // TODO: save sent time for perf
-  // TODO: push model?
   handleRequestMessage(message) {
-    const address = Address.from(message.address);
-    this.sendChunk(address);
+    this.swarm.scheduler.enqueueRequest(this, Address.from(message.address));
   }
 
-  handleCancelMessage({address}) {
-    // TODO: cancel retransmit...
+  handleCancelMessage(message) {
+    this.swarm.scheduler.cancelRequest(this, Address.from(message.address))
   }
 
   handleChokeMessage() {
@@ -360,7 +696,33 @@ class Peer {
     this.state = PeerState.READY;
   }
 
-  sendChunk(address) {
+  sendHave(address) {
+    const {encoding} = this.swarm;
+
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.HaveMessage(encoding.ChunkAddress.from(address))],
+    ));
+  }
+
+  sendRequest(address) {
+    const {encoding} = this.swarm;
+
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.RequestMessage(encoding.ChunkAddress.from(address))],
+    ));
+  }
+
+  sendCancel(address) {
+    const {encoding} = this.swarm;
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.CancelMessage(encoding.ChunkAddress.from(address))],
+    ));
+  }
+
+  sendChunk(address, timestamp) {
     const chunk = this.swarm.chunkBuffer.get(address);
     if (chunk === undefined) {
       return;
@@ -383,7 +745,7 @@ class Peer {
         if (i === 0) {
           messages.push(new encoding.SignedIntegrityMessage(
             address,
-            new encoding.Timestamp(),
+            new encoding.Timestamp(timestamp),
             new encoding.LiveSignature(signature.getSignatureHash()),
           ));
         }
@@ -402,17 +764,17 @@ class SwarmMap extends EventEmitter {
   }
 
   insert(swarm) {
-    const id = SwarmMap.swarmIdToKey(swarm.id);
-    if (this.swarms[id] === undefined) {
-      this.swarms[id] = swarm;
+    const key = SwarmMap.swarmIdToKey(swarm.uri.swarmId);
+    if (this.swarms[key] === undefined) {
+      this.swarms[key] = swarm;
       this.emit('insert', swarm);
     }
   }
 
   remove(swarm) {
-    const id = SwarmMap.swarmIdToKey(swarm.id);
-    if (this.swarms[id] !== undefined) {
-      delete this.swarms[id];
+    const key = SwarmMap.swarmIdToKey(swarm.uri.swarmId);
+    if (this.swarms[key] !== undefined) {
+      delete this.swarms[key];
       this.emit('remove', swarm);
     }
   }
@@ -438,7 +800,6 @@ class Client {
   }
 
   publishSwarm(swarm) {
-    console.log('published swarm:', swarm.id.toBuffer().toString('base64'));
     this.swarms.insert(swarm);
   }
 
@@ -446,8 +807,13 @@ class Client {
     this.swarms.remove(swarm);
   }
 
-  joinSwarm(swarmId) {
-    this.swarms.insert(new Swarm(swarmId));
+  joinSwarm(uri) {
+    const clientOptions = {
+      liveDiscardWindow: Math.ceil(BUFFER_SIZE / uri.protocolOptions[ProtocolOptions.ChunkSize]),
+      uploadRateLimit: MAX_UPLOAD_RATE,
+    };
+
+    this.swarms.insert(new Swarm(uri, clientOptions));
   }
 
   createChannel(wrtcChannel) {
@@ -520,7 +886,6 @@ class Channel extends EventEmitter {
   }
 
   send(data) {
-    // console.log('send', data.messages.values);
     this.channel.send(data.toBuffer());
   }
 

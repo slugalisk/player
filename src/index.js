@@ -32,7 +32,11 @@ const address = window.location.hostname + ':8080';
 const bootstrap = new WebSocketBootstrap(address);
 
 bootstrap.on('bootstrap', ({data, conn}) => {
-  // console.log('bootstrap', data);
+  const ppsppDataChannelOptions = {
+    ordered: false,
+    maxRetransmits: 0,
+    maxPacketLifeTime: 0,
+  };
 
   const mediator = new wrtc.Mediator(conn);
   const client = new wrtc.Client(mediator);
@@ -44,7 +48,7 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 
   const bootstrapId = hexToUint8Array(data.bootstrapId);
   dhtClient.createChannel(bootstrapId, client.createDataChannel('dht'));
-  ppsppClient.createChannel(client.createDataChannel('ppspp'));
+  ppsppClient.createChannel(client.createDataChannel('ppspp', ppsppDataChannelOptions));
 
   client.init();
 
@@ -56,13 +60,7 @@ bootstrap.on('bootstrap', ({data, conn}) => {
     client.once('open', () => sub.close());
 
     dhtClient.createChannel(id, client.createDataChannel('dht'));
-    ppsppClient.createChannel(client.createDataChannel(
-      'ppspp',
-      {
-        ordered: false,
-        protocol: 'ppspp',
-      },
-    ));
+    ppsppClient.createChannel(client.createDataChannel('ppspp', ppsppDataChannelOptions));
 
     dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
   }));

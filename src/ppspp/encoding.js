@@ -133,7 +133,7 @@ const createIntegrityHashFieldType = merkleHashTreeFunction => {
   return IntegrityHashField;
 };
 
-const createEncoding = () => {
+const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   class Uint8ProtocolOption {
     constructor(value = 0) {
       this.value = value;
@@ -247,7 +247,7 @@ const createEncoding = () => {
   }
 
   class SupportedMessagesProtocolOption {
-    constructor(messageTypes = Object.values(MessageTypes)) {
+    constructor(messageTypes = Object.values(MessageTypes).filter(v => !isNaN(v))) {
       this.type = ProtocolOptions.SupportedMessages
       this.value = {};
       messageTypes.forEach(type => this.value[type] = true);
@@ -704,9 +704,9 @@ const createEncoding = () => {
     }
   }
 
-  let LiveSignature;
-  let IntegrityHash;
-  let ChunkAddress;
+  // let LiveSignature;
+  // let IntegrityHash;
+  // let ChunkAddress;
 
   return {
     VersionProtocolOption,
@@ -731,30 +731,9 @@ const createEncoding = () => {
     ChokeMessage,
     UnchokeMessage,
     Datagram,
-
-    get LiveSignature() {
-      return LiveSignature;
-    },
-
-    setLiveSignatureFieldType(liveSignatureFieldType) {
-      LiveSignature = liveSignatureFieldType;
-    },
-
-    get IntegrityHash() {
-      return IntegrityHash;
-    },
-
-    setIntegrityHashFieldType(integrityHashFieldType) {
-      IntegrityHash = integrityHashFieldType;
-    },
-
-    get ChunkAddress() {
-      return ChunkAddress;
-    },
-
-    setChunkAddressFieldType(chunkAddressFieldType) {
-      ChunkAddress = chunkAddressFieldType;
-    },
+    LiveSignature,
+    IntegrityHash,
+    ChunkAddress,
   };
 };
 

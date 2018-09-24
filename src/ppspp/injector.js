@@ -1,22 +1,12 @@
-const {
-  createContentIntegrityVerifierFactory,
-  createMerkleHashTreeFunction,
-  createLiveSignatureVerifyFunction,
-  createLiveSignatureSignFunction,
-  generateKeyPair,
-} = require('../ppspp/integrity');
-const {
-  createEncoding,
-  createChunkAddressFieldType,
-  createIntegrityHashFieldType,
-  createLiveSignatureFieldType,
-} = require('../ppspp/encoding');
+const {generateKeyPair} = require('./integrity');
+const URI = require('./uri')
 const {
   ChunkAddressingMethod,
   ContentIntegrityProtectionMethod,
   MerkleHashTreeFunction,
   LiveSignatureAlgorithm,
-} = require('../ppspp/constants');
+  ProtocolOptions,
+} = require('./constants');
 const {Swarm} = require('../ppspp');
 
 class Injector {
@@ -36,7 +26,7 @@ class Injector {
       const subtreeChunks = this.chunkBuffer.splice(0, this.chunksPerSignature);
       this.swarm.contentIntegrity.appendSubtree(subtreeChunks).then(subtree => {
         this.swarm.chunkBuffer.set(subtree.rootAddress, subtreeChunks);
-        this.swarm.availableChunks.set(subtree.rootAddress);
+        this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
       });
     }
   }
@@ -53,36 +43,26 @@ class Injector {
     } = options;
 
     return generateKeyPair(liveSignatureAlgorithm).then(({swarmId, privateKey}) => {
-      const encoding = createEncoding();
-      encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, this.chunkSize));
-      encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
-      encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId));
-
-      const contentIntegrity = createContentIntegrityVerifierFactory(
-        contentIntegrityProtectionMethod,
-        createMerkleHashTreeFunction(merkleHashTreeFunction),
-        createLiveSignatureVerifyFunction(liveSignatureAlgorithm, swarmId),
-        createLiveSignatureSignFunction(liveSignatureAlgorithm, privateKey),
+      const uri = new URI(
+        swarmId,
+        {
+          [ProtocolOptions.ContentIntegrityProtectionMethod]: contentIntegrityProtectionMethod,
+          [ProtocolOptions.MerkleHashTreeFunction]: merkleHashTreeFunction,
+          [ProtocolOptions.LiveSignatureAlgorithm]: liveSignatureAlgorithm,
+          [ProtocolOptions.ChunkAddressingMethod]: chunkAddressingMethod,
+          [ProtocolOptions.ChunkSize]: chunkSize,
+        }
       );
 
-      const swarm = new Swarm(swarmId, encoding, contentIntegrity);
-      swarm.contentIntegrity.setLiveDiscardWindow(liveDiscardWindow);
-      swarm.availableChunks.setLiveDiscardWindow(liveDiscardWindow);
-      swarm.chunkBuffer.setLiveDiscardWindow(liveDiscardWindow);
+      console.log(uri.toString());
 
-      // TODO: Swarm.create?
-      swarm.protocolOptions = [
-        new encoding.VersionProtocolOption(),
-        new encoding.MinimumVersionProtocolOption(),
-        new encoding.SwarmIdentifierProtocolOption(swarmId.toBuffer()),
-        new encoding.ContentIntegrityProtectionMethodProtocolOption(contentIntegrityProtectionMethod),
-        new encoding.MerkleHashTreeFunctionProtocolOption(merkleHashTreeFunction),
-        new encoding.LiveSignatureAlgorithmProtocolOption(liveSignatureAlgorithm),
-        new encoding.ChunkAddressingMethodProtocolOption(chunkAddressingMethod),
-        new encoding.ChunkSizeProtocolOption(chunkSize),
-      ];
+      const clientOptions = {
+        liveDiscardWindow,
+        privateKey,
+        uploadRateLimit: 10e6,
+      };
 
-      return swarm;
+      return new Swarm(uri, clientOptions);
     }).then(swarm => new Injector(swarm, chunkSize, chunksPerSignature));
   }
 }

@@ -1,4 +1,4 @@
-module.exports = () => {
+function hirestime() {
   if (typeof process !== 'undefined' && process.hrtime) {
     return process.hrtime();
   }
@@ -14,4 +14,12 @@ module.exports = () => {
   }
 
   throw new Error('unable to find suitable time source');
-};
+}
+
+function since(timestamp) {
+  const now = hirestime();
+  return (now[0] - timestamp[0]) * 1e9 + (now[1] - timestamp[1]);
+}
+
+module.exports = hirestime;
+module.exports.since = since;

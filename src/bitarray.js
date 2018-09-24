@@ -14,20 +14,20 @@ function applyMask(byte, mask, value) {
 }
 
 class BitArray {
-  constructor(size = 0) {
+  constructor(capacity = 0) {
     this.offset = 0;
-    this.resize(size);
+    this.resize(capacity);
   }
 
   // TODO: copy old values..?
-  resize(size) {
-    this.size = size;
-    this.values = new Uint8Array(Math.ceil(size / 8));
+  resize(capacity) {
+    this.capacity = capacity;
+    this.values = new Uint8Array(Math.ceil(capacity / 8));
   }
 
   adjustOffset(index) {
     const {offset} = this;
-    const distance = (index - offset) - this.size;
+    const distance = (index - offset) - this.capacity;
     if (distance <= 0) {
       return;
     }
@@ -51,7 +51,7 @@ class BitArray {
   }
 
   unsafelySetRange(start, end, value = true) {
-    if (end - start >= this.size) {
+    if (end - start >= this.capacity) {
       this.values.fill(value ? 255 : 0);
       return;
     }
@@ -104,7 +104,7 @@ class BitArray {
   }
 
   get(index) {
-    if (index <= this.offset || index > this.offset + this.size) {
+    if (index <= this.offset || index > this.offset + this.capacity) {
       return false;
     }
 
@@ -115,7 +115,7 @@ class BitArray {
 
   toValueArray() {
     const values = [];
-    for (let i = 1; i <= this.size; i ++) {
+    for (let i = 1; i <= this.capacity; i ++) {
       if (this.get(this.offset + i)) {
         values.push(this.offset + i);
       }

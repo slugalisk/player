@@ -75,7 +75,7 @@ class NginxInjector extends EventEmitter {
     manager.post('/api/rtmp/publish_done', this.handlePublishDone.bind(this));
 
     const port = 9001;
-    this.manager = manager.listen(port, () => console.log(`manager started on ${port}!`));
+    this.manager = manager.listen(port, () => console.log('manager started on', port));
   }
 
   startNginx() {
