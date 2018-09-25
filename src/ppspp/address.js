@@ -1,4 +1,4 @@
-const { ChunkAddressingMethod } = require('./constants');
+const {ChunkAddressingMethod} = require('./constants');
 
 class Address {
   constructor(bin = 0, treeBounds = Address.binBounds(bin)) {

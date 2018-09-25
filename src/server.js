@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const http = require('http');
 const express = require('express');
 const ws = require('ws');
@@ -6,14 +8,12 @@ const ip2location = require('ip2location-nodejs');
 const path = require('path');
 const crypto = require('crypto');
 const arrayBufferToHex = require('array-buffer-to-hex');
-
-require('dotenv').config();
-
+const NginxInjector = require('./NginxInjector');
 const dht = require('./dht');
 const ppspp = require('./ppspp');
 const wrtc = require('./wrtc');
 
-ip2location.IP2Location_init(path.join(__dirname, 'IP2LOCATION-LITE-DB5.BIN'));
+ip2location.IP2Location_init(path.join(__dirname, '../vendor/IP2LOCATION-LITE-DB5.BIN'));
 
 const args = require('minimist')(process.argv.slice(2));
 const port = args.p || 8080;
@@ -67,10 +67,6 @@ function generateId(addr) {
   return new Uint8Array(id);
 }
 
-// ---
-
-const NginxInjector = require('./nginx-injector');
-
 const injector = new NginxInjector();
 injector.start();
 
@@ -83,7 +79,7 @@ injector.on('unpublish', injector => {
 });
 
 const shutdown = (signal = 'SIGTERM') => {
-  console.log(`got signal ${signal}`)
+  console.log(`got signal ${signal}`);
   injector.stop(() => {
     console.log('injector shut down');
     server.close(() => {
@@ -95,7 +91,7 @@ const shutdown = (signal = 'SIGTERM') => {
       });
     });
   });
-}
+};
 
 process.once('SIGINT', shutdown);
 process.once('SIGUSR2', shutdown);
@@ -103,6 +99,6 @@ process.once('SIGUSR2', shutdown);
 process.on('uncaughtException', (err) => {
   injector.stop();
   server.close();
-  throw err
+  throw err;
 });
 

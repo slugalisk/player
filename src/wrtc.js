@@ -1,4 +1,4 @@
-const { EventEmitter } = require('events');
+const {EventEmitter} = require('events');
 const {
   RTCPeerConnection,
   RTCSessionDescription,
@@ -51,13 +51,13 @@ class Client extends EventEmitter {
     this.waitingChannels = 0;
 
     this.pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
     });
 
     this.pc.onicecandidate = candidate => this.mediator.sendIceCandidate(candidate);
     this.pc.ondatachannel = this.handleDataChannel.bind(this);
 
-    mediator.on('icecandidate', candidate => this.addIceCandidate(candidate))
+    mediator.on('icecandidate', candidate => this.addIceCandidate(candidate));
 
     this._ready = new Promise((resolve, reject) => {
       mediator.on('remotedescription', description => {
@@ -93,7 +93,7 @@ class Client extends EventEmitter {
     this.waitingChannels ++;
     event.channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
 
-    this.emit('datachannel', event)
+    this.emit('datachannel', event);
   }
 
   createDataChannel(label, options = {}) {

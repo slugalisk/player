@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const {spawn} = require('child_process');
 const express = require('express');
 const bodyParser = require('body-parser');
 const chokidar = require('chokidar');
@@ -10,7 +10,7 @@ const {EventEmitter} = require('events');
 class NginxInjector extends EventEmitter {
   constructor() {
     super();
-    this.injectors = {}
+    this.injectors = {};
   }
 
   handleConnect(req, res) {
@@ -79,10 +79,7 @@ class NginxInjector extends EventEmitter {
   }
 
   startNginx() {
-    this.nginx = spawn(
-      '/home/slugalisk/projects/ppspp/player/src/build/nginx-1.15.2/objs/nginx',
-      ['-c', '/home/slugalisk/projects/ppspp/player/src/build/nginx.conf'],
-    )
+    this.nginx = spawn(path.join(__dirname, '/../vendor/nginx/objs/nginx'));
 
     this.nginx.stdout.on('data', (data) => {
       console.log(`ps log: ${data}`);
@@ -104,7 +101,7 @@ class NginxInjector extends EventEmitter {
 
       awaitWriteFinish: {
         stabilityThreshold: 1000,
-        pollInterval: 100
+        pollInterval: 100,
       },
     });
 

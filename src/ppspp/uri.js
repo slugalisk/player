@@ -10,7 +10,8 @@ const protocolOptionToKey = {
   [ProtocolOptions.ChunkSize]: 'x.cs',
 }
 
-// TODO: as (https://en.wikipedia.org/wiki/Magnet_URI_scheme#Normal_(as)) to m3u8 url?
+// TODO: dn with stream name
+// TODO: as to m3u8 url?
 class URI {
   constructor(swarmId, protocolOptions) {
     this.swarmId = swarmId;
@@ -26,13 +27,16 @@ class URI {
   }
 
   static parse(uriString) {
-    if (uriString.indexOf('magnet:') !== 0) {
+    if (!uriString.startsWith('magnet:')) {
       throw new Error('invalid uri: expected magnet');
     }
 
     const args = uriString.substring(8)
       .split('&')
-      .map(queryEntry => queryEntry.split('='));
+      .map(query => {
+        const [key, value] = query.split('=');
+        return [key, decodeURIComponent(value)];
+      });
 
     const protocolOptions = Object.entries(protocolOptionToKey)
       .reduce((protocolOptions, [protocolOption, key]) => {

@@ -37,7 +37,7 @@ class BitArray {
   }
 
   getByteIndex(index) {
-    return Math.floor(index / 8) % this.values.length
+    return Math.floor(index / 8) % this.values.length;
   }
 
   setRange(start, end, value = true) {
@@ -96,7 +96,7 @@ class BitArray {
 
     const byteIndex = this.getByteIndex(index);
     const mask = 1 << (7 - (index % 8));
-    this.values[byteIndex] = applyMask(this.values[byteIndex], mask, value)
+    this.values[byteIndex] = applyMask(this.values[byteIndex], mask, value);
   }
 
   unset(index) {
@@ -110,7 +110,7 @@ class BitArray {
 
     const byteIndex = this.getByteIndex(index);
     const mask = 1 << (7 - (index % 8));
-    return (this.values[byteIndex] & mask) !== 0
+    return (this.values[byteIndex] & mask) !== 0;
   }
 
   toValueArray() {

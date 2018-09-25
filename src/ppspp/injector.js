@@ -1,5 +1,5 @@
 const {generateKeyPair} = require('./integrity');
-const URI = require('./uri')
+const URI = require('./uri');
 const {
   ChunkAddressingMethod,
   ContentIntegrityProtectionMethod,
@@ -54,7 +54,7 @@ class Injector {
         }
       );
 
-      console.log(uri.toString());
+      console.log('swarm uri:', uri.toString());
 
       const clientOptions = {
         liveDiscardWindow,

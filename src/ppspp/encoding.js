@@ -1,7 +1,7 @@
-const { Buffer } = require('buffer');
+const {Buffer} = require('buffer');
 const hirestime = require('../hirestime');
-const { binBounds } = require('./address');
-const { MerkleHashTreeFunctionByteLengths } = require('./integrity');
+const {binBounds} = require('./address');
+const {MerkleHashTreeFunctionByteLengths} = require('./integrity');
 
 const {
   ProtocolOptions,
@@ -16,7 +16,7 @@ const {
 const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
   class Bin32ChunkAddress {
     constructor(value = 0) {
-      this.type = ChunkAddressingMethod.Bin32
+      this.type = ChunkAddressingMethod.Bin32;
       this.value = value;
     }
 
@@ -45,7 +45,7 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
 
   class ChunkRange32ChunkAddress {
     constructor(start = 0, end = 0) {
-      this.type = ChunkAddressingMethod.ChunkRange32
+      this.type = ChunkAddressingMethod.ChunkRange32;
       this.start = start;
       this.end = end;
     }
@@ -76,9 +76,9 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
 
   switch (addressingMethod) {
     case ChunkAddressingMethod.Bin32:
-      return Bin32ChunkAddress
+      return Bin32ChunkAddress;
     case ChunkAddressingMethod.ChunkRange32:
-      return ChunkRange32ChunkAddress
+      return ChunkRange32ChunkAddress;
     default:
       throw new Error('unsupported chunk addressing method');
   }
@@ -175,20 +175,20 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   class VersionProtocolOption extends Uint8ProtocolOption {
     constructor(version = Version.RFC7574) {
       super(version);
-      this.type = ProtocolOptions.Version
+      this.type = ProtocolOptions.Version;
     }
   }
 
   class MinimumVersionProtocolOption extends Uint8ProtocolOption {
     constructor(version = Version.RFC7574) {
       super(version);
-      this.type = ProtocolOptions.MinimumVersion
+      this.type = ProtocolOptions.MinimumVersion;
     }
   }
 
   class SwarmIdentifierProtocolOption {
     constructor(value = []) {
-      this.type = ProtocolOptions.SwarmIdentifier
+      this.type = ProtocolOptions.SwarmIdentifier;
       this.value = Buffer.from(value);
     }
 
@@ -214,41 +214,41 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   class ContentIntegrityProtectionMethodProtocolOption extends Uint8ProtocolOption {
     constructor(method = ContentIntegrityProtectionMethod.MerkleHashTree) {
       super(method);
-      this.type = ProtocolOptions.ContentIntegrityProtectionMethod
+      this.type = ProtocolOptions.ContentIntegrityProtectionMethod;
     }
   }
 
   class MerkleHashTreeFunctionProtocolOption extends Uint8ProtocolOption {
     constructor(algorithm = MerkleHashTreeFunction.SHA256) {
       super(algorithm);
-      this.type = ProtocolOptions.MerkleHashTreeFunction
+      this.type = ProtocolOptions.MerkleHashTreeFunction;
     }
   }
 
   class LiveSignatureAlgorithmProtocolOption extends Uint8ProtocolOption {
     constructor(algorithm = LiveSignatureAlgorithm.ECDSAP256SHA256) {
       super(algorithm);
-      this.type = ProtocolOptions.LiveSignatureAlgorithm
+      this.type = ProtocolOptions.LiveSignatureAlgorithm;
     }
   }
 
   class ChunkAddressingMethodProtocolOption extends Uint8ProtocolOption {
     constructor(method = ChunkAddressingMethod.ChunkRange32) {
       super(method);
-      this.type = ProtocolOptions.ChunkAddressingMethod
+      this.type = ProtocolOptions.ChunkAddressingMethod;
     }
   }
 
   class LiveDiscardWindowProtocolOption extends Uint32ProtocolOption {
     constructor(value = 0) {
       super(value);
-      this.type = ProtocolOptions.LiveDiscardWindow
+      this.type = ProtocolOptions.LiveDiscardWindow;
     }
   }
 
   class SupportedMessagesProtocolOption {
     constructor(messageTypes = Object.values(MessageTypes).filter(v => !isNaN(v))) {
-      this.type = ProtocolOptions.SupportedMessages
+      this.type = ProtocolOptions.SupportedMessages;
       this.value = {};
       messageTypes.forEach(type => this.value[type] = true);
     }
@@ -299,7 +299,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   class ChunkSizeProtocolOption extends Uint32ProtocolOption {
     constructor(value = 0) {
       super(value);
-      this.type = ProtocolOptions.ChunkSize
+      this.type = ProtocolOptions.ChunkSize;
     }
   }
 
@@ -329,8 +329,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
       this.channelId = buffer.readUInt32BE(offset);
       length += 4;
 
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
+      while (offset + length < buffer.length) {
         const code = buffer.readUInt8(offset + length);
         length += 1;
 
@@ -366,7 +365,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
         length += option.byteLength();
       });
 
-      buffer.writeUInt8(ProtocolOptions.EndOption, offset + length)
+      buffer.writeUInt8(ProtocolOptions.EndOption, offset + length);
       length += 1;
 
       return length;
@@ -420,7 +419,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
     }
 
     write(buffer, offset) {
-      let length = 0
+      let length = 0;
 
       this.address.write(buffer, offset);
       length += this.address.byteLength();
@@ -601,7 +600,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
 
     static from(values) {
       if (values instanceof Messages) {
-        return values
+        return values;
       }
       if (Array.isArray(values)) {
         return new Messages(values);
@@ -703,10 +702,6 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
       return datagram;
     }
   }
-
-  // let LiveSignature;
-  // let IntegrityHash;
-  // let ChunkAddress;
 
   return {
     VersionProtocolOption,

@@ -1,0 +1,6 @@
+[submodule "vendor/nginx"]
+	path = vendor/nginx
+	url = https://github.com/nginx/nginx.git
+[submodule "vendor/nginx-rtmp-module"]
+	path = vendor/nginx-rtmp-module
+	url = https://github.com/arut/nginx-rtmp-module.git

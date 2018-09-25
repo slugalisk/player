@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import App from './App';
-import { EventEmitter } from 'events';
+import {EventEmitter} from 'events';
 import ppspp from './ppspp';
 import dht from './dht';
 import wrtc from './wrtc';
@@ -87,4 +87,4 @@ bootstrap.on('bootstrap', ({data, conn}) => {
   });
 
   ReactDOM.render(<App ppsppClient={ppsppClient} />, document.getElementById('root'));
-})
+});

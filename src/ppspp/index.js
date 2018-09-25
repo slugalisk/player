@@ -1,4 +1,4 @@
-const { EventEmitter } = require('events');
+const {EventEmitter} = require('events');
 const BitArray = require('../bitarray');
 const Address = require('./address');
 const SwarmId = require('./swarmid');
@@ -24,7 +24,7 @@ const {
 
 const genericEncoding = createEncoding();
 
-const BUFFER_SIZE = 1e8;
+const BUFFER_SIZE = 1e7;
 const MAX_UPLOAD_RATE = 1e6;
 
 class AvailabilityMap {
@@ -120,7 +120,7 @@ class EMA {
 
 class RateMeter {
   constructor(windowMs, sampleWindowMs = 100) {
-    this.firstSampleWindow = Math.floor(Date.now() / sampleWindowMs)
+    this.firstSampleWindow = Math.floor(Date.now() / sampleWindowMs);
     this.lastSampleWindow = this.firstSampleWindow;
     this.windowMs = windowMs;
     this.sampleWindowMs = sampleWindowMs;
@@ -341,7 +341,7 @@ class Scheduler {
         flow: {id: peerId},
         task: {
           size,
-          value: address
+          value: address,
         },
       } = result;
 
@@ -384,6 +384,14 @@ class Scheduler {
   }
 
   removePeer({localId}) {
+    const peerState = this.peerStates[localId];
+    if (peerState === undefined) {
+      return;
+    }
+
+    const {requestFlow} = peerState;
+    this.requestQueue.removeFlow(requestFlow);
+
     delete this.peerStates[localId];
 
     if (-- this.peerCount === 0) {
@@ -396,7 +404,6 @@ class Scheduler {
   }
 
   setLiveDiscardWindow(peer, liveDiscardWindow) {
-    console.log({liveDiscardWindow});
     this.getPeerState(peer).availableChunks.setCapacity(liveDiscardWindow);
   }
 
@@ -410,7 +417,7 @@ class Scheduler {
   }
 
   markChunkVerified({localId}, address) {
-    this.chunkStates.get(address).verified = true;
+    // this.chunkStates.get(address).verified = true;
     this.peerStates[localId].validChunks ++;
 
     // this.chunkStates.advanceEndBin(address.end);
@@ -494,6 +501,7 @@ class Swarm {
       createMerkleHashTreeFunction(merkleHashTreeFunction),
       createLiveSignatureVerifyFunction(liveSignatureAlgorithm, swarmId),
       liveSignatureSignFunction,
+      liveDiscardWindow,
     );
 
     this.chunkBuffer = new BinRing(liveDiscardWindow);
@@ -512,8 +520,14 @@ class Swarm {
     ];
   }
 
-  verifyProtocolOptions(options) {
-    // TODO
+  verifyProtocolOptions(protocolOptions) {
+    Object.entries(this.uri.protocolOptions)
+      .forEach(([protocolOption, value]) => {
+        if (protocolOptions[protocolOption] !== value) {
+          const protocolOptionName = ProtocolOptions.name(protocolOption);
+          throw new Error(`invalid peer options: ${protocolOptionName} mismatch`);
+        }
+      });
   }
 }
 
@@ -525,6 +539,20 @@ const PeerState = {
   DISCONNECTING: 5,
 };
 
+class PeerDataHandlerContext {
+  constructor(swarm) {
+    this.swarm = swarm;
+    this.integrityVerifier = null;
+  }
+
+  getContentIntegrityVerifier(address) {
+    if (this.integrityVerifier === null) {
+      this.integrityVerifier = this.swarm.contentIntegrity.createVerifier(address);
+    }
+    return this.integrityVerifier;
+  }
+}
+
 // TODO: disconnect inactive peers
 class Peer {
   constructor(swarm, channel, remoteId = 0, localId = Peer.createChannelId()) {
@@ -533,7 +561,6 @@ class Peer {
     this.remoteId = remoteId;
     this.localId = localId;
     this.state = PeerState.CONNECTING;
-    this.integrityVerifier = null;
 
     this.handlers = {
       [MessageTypes.HANDSHAKE]: this.handleHandshakeMessage.bind(this),
@@ -583,26 +610,19 @@ class Peer {
     // this.swarm.availableChunks.removeEventListener('set', this.handleAvailableDataSet);
   }
 
-  getContentIntegrityVerifier(address) {
-    if (this.integrityVerifier === null) {
-      this.integrityVerifier = this.swarm.contentIntegrity.createVerifier(address);
-    }
-    return this.integrityVerifier;
-  }
-
   handleData(data) {
-    data.messages.toArray().forEach(message => this.handleMessage(message));
-    this.integrityVerifier = null;
+    const context = new PeerDataHandlerContext(this.swarm);
+    data.messages.toArray().forEach(message => this.handleMessage(message, context));
   }
 
-  handleMessage(message) {
+  handleMessage(message, context) {
     const handler = this.handlers[message.type];
     if (handler === undefined) {
       throw new Error('unsupported message type');
     }
 
     // console.log(MessageTypes.name(message.type), this.remoteId, message);
-    handler(message);
+    handler(message, context);
   }
 
   handleHandshakeMessage(handshake) {
@@ -637,8 +657,7 @@ class Peer {
     this.state = PeerState.READY;
   }
 
-  handleDataMessage(message) {
-    // TODO: handle multiple data messages in the same datagram...?
+  handleDataMessage(message, context) {
     const address = Address.from(message.address);
 
     this.swarm.scheduler.markChunkReceived(this, address);
@@ -649,7 +668,7 @@ class Peer {
       [new encoding.AckMessage(message.address, message.timestamp)],
     ));
 
-    this.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
+    context.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
         this.swarm.scheduler.markChunkVerified(this, address);
 
@@ -670,14 +689,14 @@ class Peer {
     this.swarm.scheduler.updateDelayStats(this, message.delaySample.value);
   }
 
-  handleIntegrityMessage(message) {
+  handleIntegrityMessage(message, context) {
     const address = Address.from(message.address);
-    this.getContentIntegrityVerifier(address).setHash(address, message.hash.value);
+    context.getContentIntegrityVerifier(address).setHash(address, message.hash.value);
   }
 
-  handleSignedIntegrityMessage(message) {
+  handleSignedIntegrityMessage(message, context) {
     const address = Address.from(message.address);
-    this.getContentIntegrityVerifier(address).setHashSignature(address, message.signature.value);
+    context.getContentIntegrityVerifier(address).setHashSignature(address, message.signature.value);
   }
 
   handleRequestMessage(message) {
@@ -685,7 +704,7 @@ class Peer {
   }
 
   handleCancelMessage(message) {
-    this.swarm.scheduler.cancelRequest(this, Address.from(message.address))
+    this.swarm.scheduler.cancelRequest(this, Address.from(message.address));
   }
 
   handleChokeMessage() {
@@ -760,6 +779,8 @@ class Peer {
 class SwarmMap extends EventEmitter {
   constructor() {
     super();
+    this.setMaxListeners(Infinity);
+
     this.swarms = {};
   }
 
@@ -808,8 +829,9 @@ class Client {
   }
 
   joinSwarm(uri) {
+    const chunkSize = uri.protocolOptions[ProtocolOptions.ChunkSize];
     const clientOptions = {
-      liveDiscardWindow: Math.ceil(BUFFER_SIZE / uri.protocolOptions[ProtocolOptions.ChunkSize]),
+      liveDiscardWindow: Math.ceil(BUFFER_SIZE / chunkSize),
       uploadRateLimit: MAX_UPLOAD_RATE,
     };
 
@@ -883,6 +905,7 @@ class Channel extends EventEmitter {
 
   handleClose() {
     Object.values(this.peers).forEach(peer => peer.close());
+    this.swarms.removeListener('insert', this.handleSwarmInsert);
   }
 
   send(data) {
@@ -890,15 +913,18 @@ class Channel extends EventEmitter {
   }
 
   handleSwarmInsert(swarm) {
+    const {peers, swarms} = this;
+
     const peer = new Peer(swarm, this);
-    this.peers[peer.localId] = peer;
+    peers[peer.localId] = peer;
     peer.init();
 
-    const {swarms} = this;
     function handleRemove(removedSwarm) {
       if (removedSwarm === swarm) {
+        delete peers[peer.localId];
         peer.close();
-        swarms.removeEventListener('remove', handleRemove);
+
+        swarms.removeListener('remove', handleRemove);
       }
     }
 

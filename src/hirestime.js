@@ -4,7 +4,7 @@ function hirestime() {
   }
 
   if (typeof window !== 'undefined' && window.performance) {
-    const { navigationStart } = performance.timing;
+    const {navigationStart} = performance.timing;
     const now = performance.now();
 
     return [

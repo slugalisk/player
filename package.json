@@ -32,9 +32,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom --watch --verbose",
     "eject": "react-scripts eject",
-    "server": "nodemon --delay 2.5s src/server.js",
-    "meme-server": "nodemon src/meme-server.js",
-    "nginx-server": "nodemon --delay 2.5s src/nginx-server.js"
+    "server": "nodemon --delay 2.5s src/server.js"
   },
   "devDependencies": {
     "nodemon": "^1.18.3"

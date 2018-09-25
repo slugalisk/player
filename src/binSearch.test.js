@@ -1,5 +1,3 @@
-/* globals it expect */
-
 import binSearch from './binSearch';
 
 it ('search', () => {

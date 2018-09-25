@@ -6,7 +6,7 @@ const isRsaAlgorithm = liveSignatureAlgorithm => {
     LiveSignatureAlgorithm.RSASHA256,
   ];
   return rsaAlgorithms.includes(liveSignatureAlgorithm);
-}
+};
 
 class SwarmId {
   constructor(

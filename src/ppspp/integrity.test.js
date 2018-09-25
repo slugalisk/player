@@ -1,5 +1,3 @@
-/* globals it expect */
-
 const integrity = require('./integrity');
 const crypto = require('crypto');
 const Address = require('./address');

@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, {Component} from 'react';
 import URI from './ppspp/uri';
 import './App.css';
 
@@ -28,7 +28,7 @@ class App extends Component {
         <form className="join-form" onSubmit={this.onJoinSubmit}>
           <input
             ref={this.input}
-            placeholder="Enter Swarm ID"
+            placeholder="Enter Swarm URI"
           />
           <button>Join</button>
         </form>

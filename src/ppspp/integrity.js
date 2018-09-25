@@ -1,4 +1,4 @@
-const { Buffer } = require('buffer');
+const {Buffer} = require('buffer');
 const arrayEqual = require('array-equal');
 const crypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
 const binSearch = require('../binSearch');
@@ -51,7 +51,7 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
     }
 
     return crypto.subtle.digest(algorithm, values).then(toUint8Array);
-  }
+  };
 };
 
 const LiveSignatureAlgorithms = {
@@ -136,6 +136,7 @@ const createContentIntegrityVerifierFactory = (
   merkleHashTreeFunction,
   liveSignatureVerifyFunction,
   liveSignatureSignFunction = unavailableLiveSignatureSignFunction,
+  liveDiscardWindow = Infinity,
 ) => {
   class Signature {
     constructor(hash, verified = false) {
@@ -360,7 +361,7 @@ const createContentIntegrityVerifierFactory = (
       return hashResult.then(() => {
         signatures.forEach(({index, signature}) => {
           signature.markVerified();
-          this.hashTree.signatures[index] = signature
+          this.hashTree.signatures[index] = signature;
         });
       });
     }
@@ -371,12 +372,6 @@ const createContentIntegrityVerifierFactory = (
       this.subtrees = [];
       this.nextStart = 0;
       this.chunkCount = 0;
-      this.liveDiscardWindow = Infinity;
-    }
-
-    setLiveDiscardWindow(liveDiscardWindow) {
-      this.liveDiscardWindow = liveDiscardWindow;
-      this.pruneSubtrees();
     }
 
     findSubtree({bin}) {
@@ -411,7 +406,7 @@ const createContentIntegrityVerifierFactory = (
     }
 
     pruneSubtrees() {
-      while (this.subtrees.length > 0 && this.chunkCount - this.subtrees[0].getChunkCount() > this.liveDiscardWindow) {
+      while (this.subtrees.length > 0 && this.chunkCount - this.subtrees[0].getChunkCount() > liveDiscardWindow) {
         const removedTree = this.subtrees.shift();
         this.chunkCount -= removedTree.getChunkCount();
       }

@@ -1,5 +1,3 @@
-/* globals it expect */
-
 import BitArray from './bitarray';
 
 it('set', () => {
@@ -52,4 +50,4 @@ it ('get', () => {
   expect(b.get(-1)).toEqual(false);
   expect(b.get(99999)).toEqual(false);
   expect(b.get(100000)).toEqual(true);
-})
+});
