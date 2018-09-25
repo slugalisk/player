@@ -1,6 +1,6 @@
 # Contributing
 
-## Gettnig Started
+## Getting Started
 
 1. fork
 2. clone recursively
@@ -10,3 +10,4 @@
 6. run `yarn install`
 7. start super node with `npm run server`
 8. start ui dev server with `npm start`
+9. start permissive chrome instance with `/usr/bin/google-chrome http://localhost:3000 --user-data-dir=/tmp --unsafely-treat-insecure-origin-as-secure=http://localhost:3000 --allow-running-insecure-content`

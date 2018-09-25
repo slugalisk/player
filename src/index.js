@@ -35,7 +35,6 @@ bootstrap.on('bootstrap', ({data, conn}) => {
   const ppsppDataChannelOptions = {
     ordered: false,
     maxRetransmits: 0,
-    maxPacketLifeTime: 0,
   };
 
   const mediator = new wrtc.Mediator(conn);
