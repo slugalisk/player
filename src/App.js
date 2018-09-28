@@ -6,16 +6,20 @@ class App extends Component {
   constructor(props) {
     super(props);
 
-    this.input = React.createRef();
+    this.state = {swarmUri: props.swarmUri};
   }
 
-  onJoinSubmit = (e) => {
+  onJoinSubmit = e => {
     e.preventDefault();
 
-    console.log(this.input.current.value);
-    const uri = URI.parse(this.input.current.value);
+    console.log(this.state.swarmUri);
+    const uri = URI.parse(this.state.swarmUri);
     console.log('joining', uri);
     this.props.ppsppClient.joinSwarm(uri);
+  }
+
+  onInputChange = e => {
+    this.setState({swarmUri: e.target.value});
   }
 
   render() {
@@ -27,8 +31,9 @@ class App extends Component {
         </div>
         <form className="join-form" onSubmit={this.onJoinSubmit}>
           <input
-            ref={this.input}
+            onChange={this.onInputChange}
             placeholder="Enter Swarm URI"
+            value={this.state.swarmUri}
           />
           <button>Join</button>
         </form>

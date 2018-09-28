@@ -66,10 +66,11 @@ it ('search', async () => {
 
   // console.log(verifierFactory.getConstituentSignatures(new Address(bin)));
 
-  const encoding = createEncoding();
-  encoding.setChunkAddressFieldType(createChunkAddressFieldType(chunkAddressingMethod, chunkSize));
-  encoding.setIntegrityHashFieldType(createIntegrityHashFieldType(merkleHashTreeFunction));
-  encoding.setLiveSignatureFieldType(createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId));
+  const encoding = createEncoding(
+    createChunkAddressFieldType(chunkAddressingMethod, chunkSize),
+    createIntegrityHashFieldType(merkleHashTreeFunction),
+    createLiveSignatureFieldType(liveSignatureAlgorithm, swarmId),
+  );
 
   const messages = [];
   verifierFactory.getConstituentSignatures(address)

@@ -1,3 +1,5 @@
+const {EventEmitter} = require('events');
+const crypto = require('crypto');
 const {generateKeyPair} = require('./integrity');
 const URI = require('./uri');
 const {
@@ -25,7 +27,7 @@ class Injector {
     while (this.chunkBuffer.length > this.chunksPerSignature) {
       const subtreeChunks = this.chunkBuffer.splice(0, this.chunksPerSignature);
       this.swarm.contentIntegrity.appendSubtree(subtreeChunks).then(subtree => {
-        this.swarm.chunkBuffer.set(subtree.rootAddress, subtreeChunks);
+        this.swarm.chunkBuffer.setRange(subtree.rootAddress, subtreeChunks);
         this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
       });
     }
@@ -34,7 +36,7 @@ class Injector {
   static create(options = {}) {
     const {
       chunkSize = 8 * 1024,
-      chunksPerSignature = 128,
+      chunksPerSignature = 64,
       liveDiscardWindow = Math.ceil(15 * 3500 * 1024 / chunkSize),
       chunkAddressingMethod = ChunkAddressingMethod.Bin32,
       contentIntegrityProtectionMethod = ContentIntegrityProtectionMethod.UnifiedMerkleTree,
@@ -67,4 +69,31 @@ class Injector {
   }
 }
 
+class NoiseInjector extends EventEmitter {
+  constructor(dataRate = 3.5e6 / 8) {
+    super();
+    this.dataRate = dataRate;
+  }
+
+  start() {
+    const data = Buffer.alloc(this.dataRate);
+    crypto.randomFillSync(data);
+
+    Injector.create().then(injector => {
+      this.intervalId = setInterval(() => injector.appendChunk(data), 1000);
+      this.injector = injector;
+      this.emit('publish', injector);
+    });
+  }
+
+  stop(done) {
+    clearInterval(this.intervalId);
+    this.emit('unpublish', this.injector);
+    if (done) {
+      setTimeout(done);
+    }
+  }
+}
+
 module.exports = Injector;
+module.exports.NoiseInjector = NoiseInjector;

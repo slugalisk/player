@@ -8,7 +8,8 @@ const ip2location = require('ip2location-nodejs');
 const path = require('path');
 const crypto = require('crypto');
 const arrayBufferToHex = require('array-buffer-to-hex');
-const NginxInjector = require('./NginxInjector');
+// const NginxInjector = require('./NginxInjector');
+const {NoiseInjector} = require('./ppspp/injector');
 const dht = require('./dht');
 const ppspp = require('./ppspp');
 const wrtc = require('./wrtc');
@@ -17,6 +18,8 @@ ip2location.IP2Location_init(path.join(__dirname, '../vendor/IP2LOCATION-LITE-DB
 
 const args = require('minimist')(process.argv.slice(2));
 const port = args.p || 8080;
+
+let swarmUri = '';
 
 const app = express();
 app.use(express.static('public'));
@@ -50,6 +53,7 @@ wss.on('connection', function(ws, req) {
     type: 'bootstrap',
     bootstrapId: arrayBufferToHex(dhtClient.id),
     id: arrayBufferToHex(id),
+    swarmUri,
   }));
 });
 
@@ -67,11 +71,12 @@ function generateId(addr) {
   return new Uint8Array(id);
 }
 
-const injector = new NginxInjector();
+const injector = new NoiseInjector();
 injector.start();
 
-injector.on('publish', injector => {
-  ppsppClient.publishSwarm(injector.swarm);
+injector.on('publish', ({swarm}) => {
+  swarmUri = swarm.uri.toString();
+  ppsppClient.publishSwarm(swarm);
 });
 
 injector.on('unpublish', injector => {

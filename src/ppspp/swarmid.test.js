@@ -1,4 +1,3 @@
-// const Buffer = require('buffer');
 import SwarmId from './swarmid';
 import {LiveSignatureAlgorithm} from './constants';
 

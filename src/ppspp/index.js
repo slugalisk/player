@@ -2,8 +2,11 @@ const {EventEmitter} = require('events');
 const BitArray = require('../bitarray');
 const Address = require('./address');
 const SwarmId = require('./swarmid');
-const hirestime = require('../hirestime');
 const wfq = require('../wfq');
+const EMA = require('../ema');
+const LEDBAT = require('../ledbat');
+const RingBuffer = require('../RingBuffer');
+const hirestime = require('../hirestime');
 const {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
@@ -48,73 +51,31 @@ class AvailabilityMap {
   }
 }
 
-class BinRing {
-  constructor(capacity) {
-    this.setCapacity(capacity);
-    this.endBin = 0;
+class BinRingBuffer extends RingBuffer {
+  advanceLastBin(bin) {
+    super.advanceLastIndex(bin / 2);
   }
 
-  setCapacity(capacity) {
-    this.capacity = capacity;
-    this.values = new Array(capacity);
-
-    for (let i = 0; i < capacity; i ++) {
-      this.values[i] = this.createEmptyValue(i);
+  setRange({start}, values) {
+    for (let i = 0; i < values.length; i ++) {
+      super.set(start / 2 + i, values[i]);
     }
   }
 
-  advanceEndBin(bin) {
-    for (let i = this.endBin; i <= bin; i += 2) {
-      const index = (i / 2) % this.capacity;
-      this.values[index] = this.createEmptyValue(i, this.values[index]);
-    }
-    this.endBin = bin + 2;
-  }
-
-  createEmptyValue() {
-    return undefined;
-  }
-
-  set({bin, start, end}, value) {
-    if (Array.isArray(value)) {
-      this.advanceEndBin(end);
-      for (let i = 0; i < value.length; i ++) {
-        this.values[(start / 2 + i) % this.capacity] = value[i];
-      }
-    } else {
-      this.advanceEndBin(bin);
-      this.values[(bin / 2) % this.capacity] = value;
-    }
+  set({bin}, value) {
+    super.set(bin / 2, value);
   }
 
   get({bin}) {
-    if (bin < this.endBin - this.capacity * 2 || bin >= this.endBin) {
-      return undefined;
-    }
-    return this.values[(bin / 2) % this.capacity];
+    return super.get(bin / 2);
   }
 
   forEach(callback) {
-    for (let i = this.endBin - this.capacity * 2; i < this.endBin; i += 2) {
-      callback(this.values[(i / 2) % this.capacity], i);
+    for (let i = this.lastIndex - this.capacity; i < this.lastIndex; i ++) {
+      if (callback(this.get(i), i * 2) === false) {
+        break;
+      }
     }
-  }
-}
-
-class EMA {
-  constructor(alpha) {
-    this.mean = 0;
-    this.alpha = alpha;
-    this.weight = 1;
-  }
-
-  update(value) {
-    this.mean = this.mean * this.alpha + (1 - this.alpha) * value;
-    this.weight *= this.alpha;
-  }
-
-  value() {
-    return this.mean / (1 - this.weight);
   }
 }
 
@@ -125,7 +86,7 @@ class RateMeter {
     this.windowMs = windowMs;
     this.sampleWindowMs = sampleWindowMs;
     this.sum = 0;
-    this.values = new Array(windowMs / sampleWindowMs);
+    this.values = new Array(Math.ceil(windowMs / sampleWindowMs));
 
     this.values.fill(0);
   }
@@ -133,7 +94,7 @@ class RateMeter {
   update(value) {
     const sampleWindow = Math.floor(Date.now() / this.sampleWindowMs);
 
-    for (let i = this.lastSampleWindow + 1; i <= sampleWindow; i += this.sampleWindowMs) {
+    for (let i = this.lastSampleWindow + 1; i <= sampleWindow; i ++) {
       const index = i % this.values.length;
       this.sum -= this.values[index];
       this.values[index] = 0;
@@ -236,7 +197,33 @@ class SchedulerChunkState {
   }
 }
 
-class SchedulerChunkMap extends BinRing {
+class SchedulerChunkRequestMap {
+  constructor() {
+    this.requests = {};
+  }
+
+  insert(address) {
+    const now = hirestime.now();
+
+    for (let i = address.start; i <= address.end; i += 2) {
+      this.requests[i] = {
+        address: new Address(i),
+        createdAt: now,
+        retries: 0,
+      };
+    }
+  }
+
+  get({bin}) {
+    return this.requests[bin];
+  }
+
+  remove({bin}) {
+    delete this.requests[bin];
+  }
+}
+
+class SchedulerChunkMap extends BinRingBuffer {
   createEmptyValue(bin, value) {
     if (value === undefined) {
       return new SchedulerChunkState(bin);
@@ -255,8 +242,15 @@ class SchedulerPeerState {
     this.peer = peer;
     this.requestFlow = requestFlow;
     this.availableChunks = new AvailabilityMap();
-    this.requestLatency = new EMA(0.05);
-    this.sendLatency = new EMA(0.05);
+
+    this.rttMean = new EMA(0.125);
+    this.rttVar = new EMA(0.25);
+    this.ledbat = new LEDBAT();
+
+    this.chunkIntervalMean = new EMA(0.05);
+    this.lastChunkTime = null;
+
+    this.requestedChunks = new SchedulerChunkRequestMap();
 
     this.timeouts = 0;
     this.validChunks = 0;
@@ -293,7 +287,7 @@ class Scheduler {
     // this.windowStart = 0;
     // this.windowEnd = 0;
     this.chunkRate = new ChunkRateMeter();
-    this.requestedChunks = [];
+    this.requestedChunks = new SchedulerChunkRequestMap();
     // average stream bit rate
     // position in available window
     // position in theoretical window
@@ -312,7 +306,7 @@ class Scheduler {
   }
 
   start() {
-    this.updateIvl = setInterval(this.update.bind(this), 1000);
+    this.updateIvl = setInterval(this.update.bind(this), 10);
   }
 
   stop() {
@@ -324,10 +318,41 @@ class Scheduler {
   }
 
   update() {
-    // this.chunkStates.forEach((chunk, bin) => console.log({chunk, bin}));
+    const now = Date.now();
+    if ((now - (this.lastUpdate || 0)) > 1000) {
+      this.lastUpdate = now;
+
+      Object.values(this.peerStates).forEach(peer => {
+        console.log({
+          id: peer.peer.localId,
+          rttMean: peer.rttMean.value(),
+          rttVar: peer.rttVar.value(),
+          ledbat: {
+            cwnd: peer.ledbat.cwnd,
+            cto: peer.ledbat.cto,
+            currentDelay: peer.ledbat.currentDelay.getMin(),
+            baseDelay: peer.ledbat.baseDelay.getMin(),
+            rttMean: peer.ledbat.rttMean.value(),
+            rttVar: peer.ledbat.rttVar.value(),
+            rtt: peer.ledbat.rtt,
+          },
+          chunkIntervalMean: peer.chunkIntervalMean.value(),
+          // requestedChunks: peer.requestedChunks,
+          timeouts: peer.timeouts,
+          validChunks: peer.validChunks,
+          invalidChunks: peer.invalidChunks,
+        });
+      });
+    }
+
+    // const chunksPerSecond = this.chunkRate.value() * 1000;
+    // console.log({chunksPerSecond});
+    this.chunkStates.forEach((chunk, bin) => {
+      // console.log({chunk, bin});
+      return false;
+    });
 
     // how far back do we need to be from the head to absorb jitter?
-
 
     let totalSize = 0;
     // eslint-disable-next-line
@@ -355,7 +380,7 @@ class Scheduler {
     }
 
     if (totalSize > 0) {
-      console.log(totalSize);
+      // console.log(totalSize);
     }
   }
 
@@ -410,17 +435,20 @@ class Scheduler {
   markChunkReceived({localId}, address) {
     // const chunk = this.chunkStates.get(address);
     // if (chunk.requestedPeerId === localId) {
-    //   this.peerStates[localId].requestLatency.update(hirestime.since(chunk.requestTime));
+    //   // const peerState = this.peerStates[localId];
+    //   // const rtt = hirestime.toNanos(hirestime.since(chunk.requestTime));
+    //   // peerState.rttMean.update(rtt);
+    //   // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
     // }
 
     // chunk.received = true;
   }
 
-  markChunkVerified({localId}, address) {
+  markChunkVerified(peer, address) {
     // this.chunkStates.get(address).verified = true;
-    this.peerStates[localId].validChunks ++;
+    this.getPeerState(peer).validChunks ++;
 
-    // this.chunkStates.advanceEndBin(address.end);
+    // this.chunkStates.advanceLastBin(address.end);
 
     this.chunkRate.update(address);
 
@@ -431,40 +459,63 @@ class Scheduler {
     });
   }
 
-  markChunkRejected({localId}, address) {
+  markChunkRejected(peer, address) {
     this.reschedule(address);
-    this.peerStates[localId].invalidChunks ++;
+    this.getPeerState(peer).invalidChunks ++;
   }
 
-  markChunkAvailable({localId}, address) {
-    this.peerStates[localId].availableChunks.set(address);
+  markChunkAvailable(peer, address) {
+    this.getPeerState(peer).availableChunks.set(address);
 
     if (typeof window !== 'undefined') {
-      this.peerStates[localId].peer.sendRequest(address);
+      this.getPeerState(peer).peer.sendRequest(address);
     }
   }
 
   markChunksLoaded(address) {
-    this.chunkStates.advanceEndBin(address.end);
+    this.chunkStates.advanceLastBin(address.end);
 
     Object.values(this.peerStates).forEach(({peer}) => peer.sendHave(address));
   }
 
-  updateDelayStats({localId}, timestamp) {
-    this.peerStates[localId].sendLatency.update(hirestime.since(timestamp));
+  markSendAcked(peer, address, delaySample) {
+    // TODO: is this an address we sent to this peer?
+
+    const peerState = this.getPeerState(peer);
+    const sentChunk = peerState.requestedChunks.get(address);
+    if (sentChunk === undefined) {
+      return;
+    }
+
+    const rtt = hirestime.toNanos(hirestime.since(sentChunk.createdAt));
+    peerState.rttMean.update(rtt);
+    peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
+
+    peerState.ledbat.addDelaySample(delaySample);
+
+    const now = hirestime.now();
+    if (peerState.lastChunkTime !== null) {
+      const chunkInterval = hirestime.toNanos(hirestime.sub(now, peerState.lastChunkTime));
+      peerState.chunkIntervalMean.update(chunkInterval);
+    }
+    peerState.lastChunkTime = now;
+
+    peerState.requestedChunks.remove(address);
   }
 
-  enqueueRequest({localId}, address) {
+  enqueueRequest(peer, address) {
     this.requestQueue.enqueue(
-      this.peerStates[localId].requestFlow,
+      this.getPeerState(peer).requestFlow,
       this.chunkSize * (address.end - address.start + 1),
       address,
     );
+
+    this.getPeerState(peer).requestedChunks.insert(address);
   }
 
-  cancelRequest({localId}, address) {
+  cancelRequest(peer, address) {
     this.requestQueue.cancel(
-      this.peerStates[localId].requestFlow,
+      this.getPeerState(peer).requestFlow,
       ({bin}) => address.containsBin(bin),
     );
   }
@@ -504,7 +555,7 @@ class Swarm {
       liveDiscardWindow,
     );
 
-    this.chunkBuffer = new BinRing(liveDiscardWindow);
+    this.chunkBuffer = new BinRingBuffer(liveDiscardWindow);
     this.scheduler = new Scheduler(chunkSize, clientOptions);
 
     this.protocolOptions = [
@@ -665,11 +716,15 @@ class Peer {
     const {encoding} = this.swarm;
     this.channel.send(new encoding.Datagram(
       this.remoteId,
-      [new encoding.AckMessage(message.address, message.timestamp)],
+      [new encoding.AckMessage(
+        message.address,
+        new encoding.Timestamp(LEDBAT.computeOneWayDelay(message.timestamp.value)),
+      )],
     ));
 
     context.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
+        // TODO: use munro to estimate chunk rate
         this.swarm.scheduler.markChunkVerified(this, address);
 
         this.swarm.chunkBuffer.set(address, message.data);
@@ -685,8 +740,9 @@ class Peer {
   }
 
   handleAckMessage(message) {
-    this.swarm.scheduler.markChunkAvailable(this, Address.from(message.address));
-    this.swarm.scheduler.updateDelayStats(this, message.delaySample.value);
+    const address = Address.from(message.address);
+    this.swarm.scheduler.markChunkAvailable(this, address);
+    this.swarm.scheduler.markSendAcked(this, address, message.delaySample.value);
   }
 
   handleIntegrityMessage(message, context) {

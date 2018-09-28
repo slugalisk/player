@@ -85,5 +85,11 @@ bootstrap.on('bootstrap', ({data, conn}) => {
     callback();
   });
 
-  ReactDOM.render(<App ppsppClient={ppsppClient} />, document.getElementById('root'));
+  ReactDOM.render(
+    <App
+      ppsppClient={ppsppClient}
+      swarmUri={data.swarmUri}
+    />,
+    document.getElementById('root'),
+  );
 });

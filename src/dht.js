@@ -1,5 +1,5 @@
 const KBucket = require('k-bucket');
-const { EventEmitter } = require('events');
+const {EventEmitter} = require('events');
 const arrayBufferToHex = require('array-buffer-to-hex');
 const arrayEqual = require('array-equal');
 const randomBytes = require('randombytes');
@@ -98,7 +98,7 @@ class Client extends EventEmitter {
     // console.log('handleMessage', event.data);
 
     const req = JSON.parse(event.data);
-    const { type, id } = req;
+    const {type, id} = req;
 
     if (this.seenIds.get(id)) {
       // console.log('dropped seen message', id);
@@ -202,7 +202,7 @@ class Client extends EventEmitter {
       from: arrayBufferToHex(this.id),
       to: arrayBufferToHex(to),
       hops: 0,
-      ...data
+      ...data,
     });
 
     // console.log('formatMessage', message);

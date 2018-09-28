@@ -2,7 +2,7 @@
 
 ## Sources
 
-The implementation has been sourced from:
+The implementation is based on:
 
 * https://tools.ietf.org/html/rfc7574
 * https://repository.tudelft.nl/islandora/object/uuid:80ebec52-2323-4fe0-bf7e-92b594c03d3f/datastream/OBJ/download

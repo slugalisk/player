@@ -373,7 +373,7 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   }
 
   class Timestamp {
-    constructor(value = hirestime()) {
+    constructor(value = hirestime.now()) {
       this.value = value;
     }
 
@@ -390,8 +390,8 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
     }
 
     write(buffer, offset) {
-      buffer.writeUInt32BE(this.value[1], offset);
-      buffer.writeUInt32BE(this.value[0], offset + 4);
+      buffer.writeUInt32BE(this.value[0], offset);
+      buffer.writeUInt32BE(this.value[1], offset + 4);
     }
   }
 
@@ -732,12 +732,9 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   };
 };
 
-const readChannelId = buffer => buffer.readUInt32BE(0);
-
 module.exports = {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
   createIntegrityHashFieldType,
   createEncoding,
-  readChannelId,
 };
