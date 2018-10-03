@@ -228,7 +228,7 @@ const createContentIntegrityVerifierFactory = (
       let parent = bin;
 
       while (bfsIndex !== 0) {
-        const branch = bfsIndex % 2 === 1 ? 1 : -1;
+        const branch = (bfsIndex & 1) === 1 ? 1 : -1;
 
         bins.push({
           isRoot: false,

@@ -40,7 +40,20 @@ class BitArray {
     return Math.floor(index / 8) % this.values.length;
   }
 
+  getIndexValue(byteIndex, bitIndex) {
+    const byteOffset = this.offset % (this.values.length * 8);
+    const offset = byteIndex < byteOffset
+      ? this.offset + (this.values.length * 8) - byteOffset
+      : this.offset;
+    return offset + (byteIndex * 8 + bitIndex);
+  }
+
   setRange(start, end, value = true) {
+    if (end - start === 1) {
+      this.set(start, value);
+      return;
+    }
+
     if (end <= this.offset) {
       return;
     }
@@ -61,8 +74,8 @@ class BitArray {
 
     if (startByteIndex > endByteIndex) {
       const ringSize = this.values.length * 8;
-      this.setRange(Math.floor(end / ringSize) * ringSize, end, value);
-      this.setRange(start, Math.ceil(start / ringSize) * ringSize - 1, value);
+      this.unsafelySetRange(Math.floor(end / ringSize) * ringSize, end, value);
+      this.unsafelySetRange(start, Math.ceil(start / ringSize) * ringSize - 1, value);
       return;
     }
 
@@ -121,6 +134,34 @@ class BitArray {
       }
     }
     return values;
+  }
+
+  min() {
+    for (let i = this.offset; i <= this.offset + this.capacity; i += 8) {
+      if (this.values[this.getByteIndex(i)] !== 0) {
+        const firstBit = Math.floor(i / 8) * 8;
+        for (let j = firstBit; j < firstBit + 8; j ++) {
+          if (this.get(j)) {
+            return j;
+          }
+        }
+      }
+    }
+    return Infinity;
+  }
+
+  max() {
+    for (let i = this.capacity + this.offset; i >= this.offset; i -= 8) {
+      if (this.values[this.getByteIndex(i)] !== 0) {
+        const lastBit = Math.ceil(i / 8) * 8 + 1;
+        for (let j = lastBit; j > lastBit - 8; j --) {
+          if (this.get(j)) {
+            return j;
+          }
+        }
+      }
+    }
+    return -Infinity;
   }
 }
 

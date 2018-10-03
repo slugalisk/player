@@ -32,15 +32,9 @@ class Address {
   }
 
   static binBounds(bin) {
-    let width = 2;
-    while (bin % width === width - 1) {
-      width *= 2;
-    }
-    width /= 2;
-
     return [
-      bin - width + 1,
-      bin + width - 1,
+      bin & (bin + 1),
+      (bin | (bin + 1)) - 1,
     ];
   }
 }

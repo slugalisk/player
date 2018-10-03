@@ -1,5 +1,4 @@
 const {Buffer} = require('buffer');
-const hirestime = require('../hirestime');
 const {binBounds} = require('./address');
 const {MerkleHashTreeFunctionByteLengths} = require('./integrity');
 
@@ -373,15 +372,14 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   }
 
   class Timestamp {
-    constructor(value = hirestime.now()) {
+    constructor(value = Date.now()) {
       this.value = value;
     }
 
     read(buffer, offset) {
-      this.value = [
-        buffer.readUInt32BE(offset),
-        buffer.readUInt32BE(offset + 4),
-      ];
+      const seconds = buffer.readInt32BE(offset);
+      const nanoseconds = buffer.readInt32BE(offset + 4);
+      this.value = seconds * 1e3 + nanoseconds / 1e6;
       return 8;
     }
 
@@ -390,8 +388,8 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
     }
 
     write(buffer, offset) {
-      buffer.writeUInt32BE(this.value[0], offset);
-      buffer.writeUInt32BE(this.value[1], offset + 4);
+      buffer.writeInt32BE(Math.floor(this.value / 1e3), offset);
+      buffer.writeInt32BE((this.value % 1e3) * 1e6, offset + 4);
     }
   }
 

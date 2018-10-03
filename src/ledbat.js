@@ -1,4 +1,3 @@
-const hirestime = require('./hirestime');
 const EMA = require('./ema');
 const RingBuffer = require('./RingBuffer');
 
@@ -44,7 +43,7 @@ const INIT_CWND = 2;
 const MIN_CWND = 2;
 
 // max safe WebRTC data channel message size
-const MSS = 65535;
+const MSS = 8 * 1024;
 
 // rfc6298
 const COEF_G = 0.1;
@@ -61,8 +60,12 @@ class LEDBAT {
   constructor(target = TARGET) {
     this.target = target;
     this.flightSize = 0;
+
+    // the amount of data that is allowed to be outstanding in an rtt in bytes
     this.cwnd = INIT_CWND * MSS;
-    this.cto = 1000;
+
+    // the congestion timeout
+    this.cto = 1;
     this.currentDelay = new DelayBuffer(CURRENT_HISTORY, CURRENT_HISTORY_INTERVAL);
     this.baseDelay = new DelayBuffer(BASE_HISTORY, BASE_HISTORY_INTERVAL);
 
@@ -70,37 +73,50 @@ class LEDBAT {
     this.lastAckTime = Infinity;
     this.rttMean = new EMA(COEF_ALPHA);
     this.rttVar = new EMA(COEF_BETA);
+
+    this.ackSize = 0;
+  }
+
+  addSent(bytes) {
+    this.flightSize += bytes;
   }
 
   addDelaySample(delaySample, bytes = MSS) {
-    const delaySampleMs = hirestime.toMillis(delaySample);
+    this.currentDelay.update(delaySample);
+    this.baseDelay.update(delaySample);
 
-    this.currentDelay.update(delaySampleMs);
-    this.baseDelay.update(delaySampleMs);
+    this.ackSize += bytes;
+
+    this.lastAckTime = Date.now();
+  }
+
+  digestDelaySamples() {
+    if (this.ackSize === 0) {
+      this.cwnd = MSS;
+      this.cto *= 2;
+      return;
+    }
 
     const queuingDelay = this.currentDelay.getMin() - this.baseDelay.getMin();
     const offTarget = (this.target - queuingDelay) / this.target;
-    this.cwnd += GAIN * offTarget * bytes * MSS / this.cwnd;
+    this.cwnd += GAIN * offTarget * this.ackSize * MSS / this.cwnd;
 
     const maxAllowedCwnd = this.flightSize + ALLOWED_INCREASE * MSS;
     this.cwnd = Math.max(Math.min(this.cwnd, maxAllowedCwnd), MIN_CWND * MSS);
 
-    this.flightSize = Math.max(0, this.flightSize - bytes);
-
-    this.lastAckTime = Date.now();
-
-    this.updateCto(queuingDelay);
+    this.flightSize = Math.max(0, this.flightSize - this.ackSize);
+    this.ackSize = 0;
   }
 
-  updateCto(queuingDelay) {
-    this.rtt = queuingDelay;
+  addRttSample(rtt) {
+    this.rtt = rtt;
 
-    this.rttMean.update(queuingDelay);
-    this.rttVar.update(Math.abs(this.rttMean.value() - queuingDelay));
+    this.rttMean.update(rtt);
+    this.rttVar.update(Math.abs(this.rttMean.value() - rtt));
 
     this.cto = this.rttMean.value() + Math.max(COEF_G, COEF_K * this.rttVar.value());
-    if (this.cto < 1000) {
-      this.cto = 1000;
+    if (this.cto < 1) {
+      this.cto = 1;
     }
   }
 
@@ -126,7 +142,7 @@ class LEDBAT {
   }
 
   static computeOneWayDelay(timestamp) {
-    return hirestime.since(timestamp);
+    return Date.now() - timestamp;
   }
 }
 
