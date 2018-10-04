@@ -15,8 +15,8 @@ class AvailabilityMap {
     this.values.resize(capacity);
   }
 
-  set(address) {
-    this.values.setRange(address.start / 2, address.end / 2 + 1);
+  set(address, value) {
+    this.values.setRange(address.start / 2, address.end / 2 + 1, value);
   }
 
   get({start, end}) {
@@ -288,9 +288,15 @@ class SchedulerPeerState {
     this.requestFlow = requestFlow;
     this.availableChunks = new AvailabilityMap();
 
-    this.rttMean = new EMA(0.125);
-    this.rttVar = new EMA(0.25);
     this.ledbat = new LEDBAT();
+
+    // this.rttMean = new EMA(0.125);
+    // this.rttVar = new EMA(0.25);
+
+    // this.chunkIntervalMean = new EMA(0.25);
+
+    this.rttMean = new EMA(0.05);
+    this.rttVar = new EMA(0.05);
 
     this.chunkIntervalMean = new EMA(0.25);
     this.lastChunkTime = null;
@@ -301,6 +307,9 @@ class SchedulerPeerState {
     this.timeouts = 0;
     this.validChunks = 0;
     this.invalidChunks = 0;
+
+    this.requestQueue = [];
+    this.lastDataOutTime = 0;
   }
 }
 
@@ -365,6 +374,9 @@ class Scheduler {
     this.totalRequestsReceived = 0;
     this.totalReceived = 0;
     this.totalAdded = 0;
+    this.totalCancelled = 0;
+    this.ackUnknownSend = 0;
+    this.sendDelay = new EMA(0.05);
     setInterval(this.debug.bind(this), 1000);
 
     this.nextSendTime = 0;
@@ -417,27 +429,26 @@ class Scheduler {
         }
       }
 
-      const planFor = Math.max(1000, peerState.ledbat.rttMean.value() * 4);
+      const planFor = Math.min(1000, peerState.rttMean.value() * 4);
 
       const dip = peerState.chunkIntervalMean.value() || 0;
       const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
 
       const cwnd = firstPlanPick - peerState.sentRequests.length;
 
-      console.log({
+      console.log(JSON.stringify({
         peer_remoteId: peerState.peer.remoteId,
         peer_localId: peerState.peer.localId,
         sentRequests: peerState.sentRequests.length,
+        swift_rtt: peerState.rttMean.value(),
+        swift_rttvar: peerState.rttVar.value(),
+        swift_chunkIntervalMean: peerState.chunkIntervalMean.value(),
         swift_cwnd: cwnd,
-        minIncompleteBin: this.minIncompleteBin,
         totals_totalBothHave: totalBothHave,
         totals_totalTheyHave: totalTheyHave,
         totals_totalWeWant: totalWeWant,
         totals_totalWeHave: totalWeHave,
         totals_totalWeRequested: totalWeRequested,
-        // rttMean: peerState.rttMean.value(),
-        // rttVar: peerState.rttVar.value(),
-        // ledbat: {
         ledbat_cwnd: peerState.ledbat.cwnd,
         ledbat_cto: peerState.ledbat.cto,
         ledbat_currentDelay: peerState.ledbat.currentDelay.getMin(),
@@ -445,32 +456,37 @@ class Scheduler {
         ledbat_rttMean: peerState.ledbat.rttMean.value(),
         ledbat_rttVar: peerState.ledbat.rttVar.value(),
         ledbat_rtt: peerState.ledbat.rtt,
-        // },
-        chunkIntervalMean: peerState.chunkIntervalMean.value(),
+        ledbat_flightSize: peerState.ledbat.flightSize,
         // requestedChunks: peerState.requestedChunks,
         timeouts: peerState.timeouts,
         validChunks: peerState.validChunks,
         invalidChunks: peerState.invalidChunks,
         timeout: timeout,
-        picker_firstLoadedChunk: firstLoadedChunk,
-        picker_firstRequestedChunk: firstRequestedChunk,
         picker_startBin: startBin,
         picker_lastAvailableBin: lastAvailableBin,
-      });
+      }, true, 2));
     });
 
-    console.log({
+    console.log(JSON.stringify({
       totalSends: this.totalSends,
       totalRequests: this.totalRequests,
       totalRequestsReceived: this.totalRequestsReceived,
       totalReceived: this.totalReceived,
       totalAdded: this.totalAdded,
-    });
+      totalCancelled: this.totalCancelled,
+      ackUnknownSend: this.ackUnknownSend,
+      minIncompleteBin: this.minIncompleteBin,
+      sendDelay: this.sendDelay.value(),
+      picker_firstLoadedChunk: this.loadedChunks.min(),
+      picker_firstRequestedChunk: this.requestedChunks.min(),
+    }, true, 2));
     this.totalSends = 0;
     this.totalRequests = 0;
     this.totalRequestsReceived = 0;
     this.totalReceived = 0;
+    // this.ackUnknownSend = 0;
     this.totalAdded = 0;
+    this.totalCancelled = 0;
   }
 
   start() {
@@ -548,7 +564,7 @@ class Scheduler {
 
     // console.log({removed});
 
-    const planFor = Math.max(1000, ledbat.rttMean.value() * 4);
+    const planFor = Math.min(1000, ledbat.rttMean.value() * 4);
     const timeoutThreshold = Date.now() - planFor * 2;
 
     const cancelledRequests = [];
@@ -561,7 +577,9 @@ class Scheduler {
     }
 
     if (cancelledRequests.length > 0) {
-      console.log(cancelledRequests);
+      this.totalCancelled += cancelledRequests.length;
+      // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
+      cancelledRequests.forEach(({address}) => sentRequests.remove(address));
     }
 
     const dip = peerState.chunkIntervalMean.value() || 0;
@@ -596,80 +614,86 @@ class Scheduler {
       }
     }
 
+    if (cancelledRequests.length > 0) {
+      cancelledRequests.forEach(({address}) => {
+        this.requestedChunks.set(address, false);
+        peerState.peer.sendCancel(address);
+      });
+    }
+
     if (this.minIncompleteBin === -Infinity && requestAddresses.length !== 0) {
       this.minIncompleteBin = requestAddresses[0].bin;
     }
 
-    // console.log({
-    //   startBin,
-    //   lastAvailableBin,
-    //   availableChunks,
-    //   ledbat,
-    //   requestedChunks,
-    //   requestAddresses,
-    // });
-
     if (requestAddresses.length !== 0) {
-      // console.log({
-      //   binRange_start: startBin,
-      //   binRange_end: endBin,
-      //   requestedChunks_start: this.requestedChunks.values.offset * 2,
-      //   requestedChunks_end: (this.requestedChunks.values.offset + this.requestedChunks.values.capacity) * 2,
-      //   availableChunks_min: availableChunks.min(),
-      //   availableChunks_max: availableChunks.max(),
-      //   reqAddr_start: requestAddresses[0].bin,
-      //   reqAddr_end: requestAddresses[requestAddresses.length - 1].bin,
-      // });
       this.totalRequests += requestAddresses.length;
       peerState.peer.sendRequest(...requestAddresses);
     }
 
+    let sendInterval = (ledbat.rttMean.value() || 0) / (ledbat.cwnd / this.chunkSize);
+    const luft = sendInterval * 4;
+    const now = Date.now();
+
+    // TODO: retry/abort send
+    // if (ledbat.flightSize < ledbat.cwnd && peerState.lastDataOutTime + sendInterval <= now + luft) {
+
+    if (peerState.lastDataOutTime + sendInterval <= now + luft) {
+      const requestedAddress = peerState.requestQueue.shift();
+      if (requestedAddress !== undefined) {
+        const requestedChunk = peerState.requestedChunks.get(requestedAddress);
+        if (requestedChunk !== undefined) {
+          requestedChunk.sentAt = now;
+          peerState.ledbat.addSent(this.chunkSize);
+          peerState.peer.sendChunk(requestedAddress);
+          this.totalSends ++;
+        }
+      }
+      peerState.lastDataOutTime = now;
+    }
+
     peerState.peer.flush();
 
-    let cto = peerState.ledbat.cto / (peerState.ledbat.cwnd / this.chunkSize);
-    const timeout = Math.ceil(Math.min(cto, 1000));
+    const timeout = Math.min(ledbat.rttMean.value() / (ledbat.cwnd / this.chunkSize), 1000);
     this.timers[peerState.localId] = setTimeout(() => this.update(peerState), timeout);
   }
 
-  scheduleSend(reschedule = false) {
-    const request = this.requestQueue.peek();
-    if (request === null) {
-      this.nextSendTimeout = 0;
-      return;
-    }
+  // scheduleSend(reschedule = false) {
+  //   const request = this.requestQueue.peek();
+  //   if (request === null) {
+  //     this.nextSendTimeout = 0;
+  //     return;
+  //   }
 
-    const {virtualFinish} = request.task;
-    if (!reschedule && virtualFinish > this.nextSendTime && this.nextSendTimeout !== 0) {
-      return;
-    }
-    clearTimeout(this.nextSendTimeout);
+  //   const {virtualFinish} = request.task;
+  //   if (!reschedule && virtualFinish > this.nextSendTime && this.nextSendTimeout !== 0) {
+  //     return;
+  //   }
+  //   clearTimeout(this.nextSendTimeout);
 
-    this.nextSendTime = virtualFinish;
-    this.nextSendTimeout = setTimeout(
-      () => this.doSend(),
-      0,
-      // Math.min(10, Math.max(0, Date.now() - virtualFinish)),
-    );
-  }
+  //   const delay = Math.min(10, Math.max(0, Math.max(Date.now(), this.nextSendTime) - virtualFinish));
+  //   this.sendDelay.update(delay);
+  //   this.nextSendTimeout = setTimeout(() => this.doSend(), delay);
+  //   this.nextSendTime = virtualFinish;
+  // }
 
-  doSend() {
-    const request = this.requestQueue.dequeue();
-    if (request === null) {
-      return;
-    }
+  // doSend() {
+  //   const request = this.requestQueue.dequeue();
+  //   if (request === null) {
+  //     return;
+  //   }
 
-    const peerState = this.peerStates[request.flow.id];
-    const requestedChunk = peerState.requestedChunks.get(request.task.value);
-    if (peerState !== undefined && requestedChunk !== undefined) {
-      requestedChunk.sentAt = Date.now();
-      peerState.ledbat.addSent(this.chunkSize);
-      this.totalSends ++;
+  //   const peerState = this.peerStates[request.flow.id];
+  //   const requestedChunk = peerState.requestedChunks.get(request.task.value);
+  //   if (peerState !== undefined && requestedChunk !== undefined) {
+  //     requestedChunk.sentAt = Date.now();
+  //     peerState.ledbat.addSent(this.chunkSize);
+  //     this.totalSends ++;
 
-      peerState.peer.sendChunk(request.task.value);
-    }
+  //     peerState.peer.sendChunk(request.task.value);
+  //   }
 
-    this.scheduleSend(true);
-  }
+  //   this.scheduleSend(true);
+  // }
 
   addPeer(peer) {
     const {localId} = peer;
@@ -731,11 +755,16 @@ class Scheduler {
     peerState.lastChunkTime = now;
 
     const rtt = now - request.createdAt;
-    // TODO: ledbat is not symmetrical
-    peerState.ledbat.addRttSample(rtt);
-    // peerState.ledbat.addDelaySample(delaySample);
+    if (isNaN(rtt)) {
+      debugger;
+    } else {
+      peerState.ledbat.addRttSample(rtt);
+      // peerState.rttMean.update(rtt);
+      // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
+    }
 
-    // TODO: add delay sample
+    // TODO: double check LEDBAT to make sure we shouldn't be doing
+    // something here
 
     peerState.sentRequests.remove(address);
   }
@@ -793,18 +822,13 @@ class Scheduler {
     const peerState = this.getPeerState(peer);
     const sentChunk = peerState.requestedChunks.get(address);
     if (sentChunk === undefined) {
+      this.ackUnknownSend ++;
       return;
     }
 
     const rtt = Date.now() - sentChunk.sentAt;
-    if (isNaN(rtt)) {
-      debugger;
-    } else {
-      // peerState.rttMean.update(rtt);
-      // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
-      peerState.ledbat.addRttSample(rtt);
-    }
 
+    peerState.ledbat.addRttSample(rtt);
     peerState.ledbat.addDelaySample(delaySample, this.chunkSize);
 
     peerState.requestedChunks.remove(address);
@@ -820,16 +844,17 @@ class Scheduler {
 
     for (let i = address.start; i <= address.end; i += 2) {
       this.totalRequestsReceived ++;
-      this.requestQueue.enqueue(
-        this.getPeerState(peer).requestFlow,
-        this.chunkSize,
-        new Address(i),
-      );
+      // this.requestQueue.enqueue(
+      //   this.getPeerState(peer).requestFlow,
+      //   this.chunkSize,
+      //   new Address(i),
+      // );
+      this.getPeerState(peer).requestQueue.push(new Address(i));
     }
 
     const {requestedChunks} = this.getPeerState(peer);
     requestedChunks.insert(address);
-    this.scheduleSend();
+    // this.scheduleSend();
   }
 
   cancelRequest(peer, address) {

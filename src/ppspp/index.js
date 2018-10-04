@@ -219,14 +219,11 @@ class Peer {
     this.swarm.scheduler.markChunkReceived(this, address, delaySample);
 
     const {encoding} = this.swarm;
-    this.sendBuffer.push(new encoding.AckMessage(message.address, new encoding.Timestamp(delaySample)));
-    // this.channel.send(new encoding.Datagram(
-    //   this.remoteId,
-    //   [new encoding.AckMessage(
-    //     message.address,
-    //     new encoding.Timestamp(delaySample),
-    //   )],
-    // ));
+    this.channel.send(new encoding.Datagram(
+      this.remoteId,
+      [new encoding.AckMessage(message.address, new encoding.Timestamp(delaySample))],
+    ));
+    // this.sendBuffer.push(new encoding.AckMessage(message.address, new encoding.Timestamp(delaySample)));
 
     context.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
@@ -283,12 +280,6 @@ class Peer {
 
   sendHave(address) {
     const {encoding} = this.swarm;
-
-    // this.channel.send(new encoding.Datagram(
-    //   this.remoteId,
-    //   [new encoding.HaveMessage(encoding.ChunkAddress.from(address))],
-    // ));
-
     this.sendBuffer.push(new encoding.HaveMessage(encoding.ChunkAddress.from(address)));
   }
 
@@ -313,21 +304,25 @@ class Peer {
     }
 
     const {encoding} = this.swarm;
-    const messages = [];
 
     // TODO: omit signatures for bins the peer has already acked
-    this.swarm.contentIntegrity.getConstituentSignatures(address)
+    const constituentSignatures = this.swarm.contentIntegrity.getConstituentSignatures(address);
+    if (constituentSignatures === undefined) {
+      return;
+    }
+
+    constituentSignatures
       .reverse()
       .forEach(({bin, signature}, i) => {
         const address = encoding.ChunkAddress.from(new Address(bin));
 
-        messages.push(new encoding.IntegrityMessage(
+        this.sendBuffer.push(new encoding.IntegrityMessage(
           address,
           new encoding.IntegrityHash(signature.getHash()),
         ));
 
         if (i === 0) {
-          messages.push(new encoding.SignedIntegrityMessage(
+          this.sendBuffer.push(new encoding.SignedIntegrityMessage(
             address,
             new encoding.Timestamp(timestamp),
             new encoding.LiveSignature(signature.getSignatureHash()),
@@ -335,9 +330,8 @@ class Peer {
         }
       });
 
-    messages.push(new encoding.DataMessage(encoding.ChunkAddress.from(address), chunk));
+    this.sendBuffer.push(new encoding.DataMessage(encoding.ChunkAddress.from(address), chunk));
 
-    this.sendBuffer.push(...messages);
     this.flush();
   }
 

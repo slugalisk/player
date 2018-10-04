@@ -7,6 +7,8 @@ set -e
 
 pushd `pwd`
 
+# TODO: use apt... libssl-dev, libpcre3-dev, zlib1g-dev
+
 SCRIPT=`realpath $0`
 BASE_DIR=`dirname $SCRIPT`
 

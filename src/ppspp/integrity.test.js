@@ -17,7 +17,7 @@ const {
   LiveSignatureAlgorithm,
 } = require('./constants');
 
-it ('search', async () => {
+it ('verifyChunk', async () => {
   const remoteId = 1;
 
   const chunkAddressingMethod = ChunkAddressingMethod.Bin32;
@@ -121,6 +121,7 @@ it ('search', async () => {
 
   // console.log(remoteDatagram);
 
+  let verifierResult;
   remoteDatagram.messages.toArray().forEach(message => {
     // console.log(message);
 
@@ -137,12 +138,12 @@ it ('search', async () => {
       }
       case MessageTypes.DATA: {
         const address = Address.from(message.address);
-        createRemoteVerifier(address)
-          .verifyChunk(address, message.data)
-          .then(() => console.log('success'))
-          .catch(() => console.log('failure :('));
+        verifierResult = createRemoteVerifier(address)
+          .verifyChunk(address, message.data);
         break;
       }
     }
   });
+
+  return verifierResult;
 });

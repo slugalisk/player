@@ -18,7 +18,11 @@ class RingBuffer {
       return;
     }
 
-    for (let i = this.lastIndex; i < lastIndex; i ++) {
+    let firstEmptyIndex = this.lastIndex;
+    if (lastIndex - firstEmptyIndex > this.capacity) {
+      firstEmptyIndex = lastIndex - this.capacity;
+    }
+    for (let i = firstEmptyIndex; i <= lastIndex; i ++) {
       const index = i % this.capacity;
       this.values[index] = this.createEmptyValue(i, this.values[index]);
     }

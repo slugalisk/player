@@ -44,7 +44,7 @@ class Queue {
     }
   }
 
-  dequeue() {
+  getNextScheduledFlow() {
     let minVirtualFinish = Infinity;
     let flow = null;
     for (let i = 0; i < this.flows.length; i ++) {
@@ -53,6 +53,25 @@ class Queue {
         minVirtualFinish = flow.nextVirtualFinish;
       }
     }
+
+    return flow;
+  }
+
+  peek() {
+    const flow = this.getNextScheduledFlow();
+
+    if (flow === null) {
+      return null;
+    }
+
+    return {
+      flow,
+      task: flow.queue[0],
+    };
+  }
+
+  dequeue() {
+    const flow = this.getNextScheduledFlow();
 
     if (flow === null) {
       return null;

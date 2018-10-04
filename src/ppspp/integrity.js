@@ -164,11 +164,11 @@ const createContentIntegrityVerifierFactory = (
     constructor(signature, hash) {
       this.signature = signature;
       this.hash = hash;
-      this.verificationResult = null;
+      this.verificationResult = undefined;
     }
 
     verifyHash() {
-      if (this.verificationResult === null) {
+      if (this.verificationResult === undefined) {
         this.verificationResult = liveSignatureVerifyFunction(this.hash, this.getHash())
           .then(() => this.markVerified());
       }
@@ -383,12 +383,12 @@ const createContentIntegrityVerifierFactory = (
         },
       );
 
-      return index < 0 ? null : this.subtrees[index];
+      return index < 0 ? undefined : this.subtrees[index];
     }
 
     insertSubtree(subtree) {
       const storedSubtree = this.findSubtree(subtree.rootAddress);
-      if (storedSubtree !== null) {
+      if (storedSubtree !== undefined) {
         if (storedSubtree !== subtree) {
           subtree.copy(storedSubtree);
         }
@@ -431,7 +431,12 @@ const createContentIntegrityVerifierFactory = (
     }
 
     getConstituentSignatures(address) {
-      return this.findSubtree(address).getConstituentSignatures(address);
+      const subtree = this.findSubtree(address);
+      if (subtree === undefined) {
+        return;
+      }
+
+      return subtree.getConstituentSignatures(address);
     }
   }
 
