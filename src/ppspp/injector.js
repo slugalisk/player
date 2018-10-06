@@ -16,12 +16,29 @@ class Injector {
     this.swarm = swarm;
     this.chunkSize = chunkSize;
     this.chunksPerSignature = chunksPerSignature;
+    this.inputBuffer = Buffer.alloc(0);
     this.chunkBuffer = [];
   }
 
-  appendChunk(videoChunk) {
-    for (let i = 0; i < videoChunk.length; i += this.chunkSize) {
-      this.chunkBuffer.push(videoChunk.slice(i, Math.min(videoChunk.length, i + this.chunkSize)));
+  appendData(data) {
+    if (this.inputBuffer.length + data.length < this.chunkSize) {
+      this.inputBuffer = Buffer.concat([this.inputBuffer, data]);
+      return;
+    }
+
+    let dataOffset = 0;
+    if (this.inputBuffer.length > 0) {
+      dataOffset = this.chunkSize - this.inputBuffer.length;
+      this.chunkBuffer.push(Buffer.concat([this.inputBuffer, data.slice(0, dataOffset)], this.chunkSize));
+    }
+
+    for (let i = dataOffset; i + this.chunkSize < data.length; i += this.chunkSize) {
+      this.chunkBuffer.push(data.slice(i, Math.min(data.length, i + this.chunkSize)));
+      dataOffset = i + this.chunkSize;
+    }
+
+    if (dataOffset < data.length) {
+      this.inputBuffer = data.slice(dataOffset);
     }
 
     while (this.chunkBuffer.length > this.chunksPerSignature) {
@@ -70,9 +87,10 @@ class Injector {
 }
 
 class NoiseInjector extends EventEmitter {
-  constructor(dataRate = 3.5e6 / 8) {
+  constructor(dataRate = 3.5e6 / 8, interval = 250) {
     super();
-    this.dataRate = dataRate;
+    this.dataRate = dataRate * (interval / 1000);
+    this.interval = interval;
   }
 
   start() {
@@ -80,7 +98,7 @@ class NoiseInjector extends EventEmitter {
     crypto.randomFillSync(data);
 
     Injector.create().then(injector => {
-      this.intervalId = setInterval(() => injector.appendChunk(data), 1000);
+      this.intervalId = setInterval(() => injector.appendChunk(data), this.interval);
       this.injector = injector;
       this.emit('publish', injector);
     });

@@ -8,8 +8,8 @@ const ip2location = require('ip2location-nodejs');
 const path = require('path');
 const crypto = require('crypto');
 const arrayBufferToHex = require('array-buffer-to-hex');
-// const NginxInjector = require('./NginxInjector');
-const {NoiseInjector} = require('./ppspp/injector');
+const NginxInjector = require('./NginxInjector');
+// const {ChunkedWriteStream} = require('./chunkedStream');
 const dht = require('./dht');
 const ppspp = require('./ppspp');
 const wrtc = require('./wrtc');
@@ -71,7 +71,7 @@ function generateId(addr) {
   return new Uint8Array(id);
 }
 
-const injector = new NoiseInjector();
+const injector = new NginxInjector();
 injector.start();
 
 injector.on('publish', ({swarm}) => {

@@ -5,26 +5,12 @@ JOBS=${JOBS:-$nproc}
 
 set -e
 
-pushd `pwd`
+sudo apt install -y libssl-dev libpcre-3-dev zlib1g-dev
 
-# TODO: use apt... libssl-dev, libpcre3-dev, zlib1g-dev
+pushd `pwd`
 
 SCRIPT=`realpath $0`
 BASE_DIR=`dirname $SCRIPT`
-
-cd $BASE_DIR
-wget https://ftp.pcre.org/pub/pcre/pcre-8.42.tar.gz
-tar xzf pcre-8.42.tar.gz
-cd pcre-8.42
-./configure
-make -j $JOBS
-
-cd $BASE_DIR
-wget https://ayera.dl.sourceforge.net/project/libpng/zlib/1.2.11/zlib-1.2.11.tar.gz
-tar xzf zlib-1.2.11.tar.gz
-cd zlib-1.2.11
-./configure
-make -j $JOBS
 
 cd "$BASE_DIR/nginx"
 ./auto/configure \
@@ -40,13 +26,9 @@ cd "$BASE_DIR/nginx"
   --http-fastcgi-temp-path="$BASE_DIR/run/http-fastcgi-temp" \
   --http-uwsgi-temp-path="$BASE_DIR/run/http-uwsgi-temp" \
   --http-scgi-temp-path="$BASE_DIR/run/http-scgi-temp" \
-  --with-pcre=../pcre-8.42 \
-  --with-zlib=../zlib-1.2.11 \
   --with-http_ssl_module \
   --with-stream \
   --add-module=../nginx-rtmp-module
 make -j $JOBS
-
-mkdir -p /usr/local/nginx
 
 popd

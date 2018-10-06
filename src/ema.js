@@ -10,6 +10,15 @@ class EMA {
     this.weight *= this.alpha;
   }
 
+  set(value) {
+    this.mean = value;
+    this.weight = 0;
+  }
+
+  isEmpty() {
+    return this.weight === 1;
+  }
+
   value() {
     return this.mean / (1 - this.weight);
   }

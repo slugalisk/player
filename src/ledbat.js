@@ -46,7 +46,7 @@ const MIN_CWND = 2;
 const MSS = 8 * 1024;
 
 // rfc6298
-const COEF_G = 0.1;
+const COEF_G = 1;
 const COEF_K = 4;
 
 // jacobson, v. "congestion avoidance and control"
@@ -54,18 +54,17 @@ const COEF_K = 4;
 const COEF_ALPHA = 0.125;
 const COEF_BETA = 0.25;
 
-// const MIN_WINDOW_SIZE = 10;
-
 class LEDBAT {
-  constructor(target = TARGET) {
+  constructor(target = TARGET, mss = MSS) {
     this.target = target;
+    this.mss = mss;
     this.flightSize = 0;
 
     // the amount of data that is allowed to be outstanding in an rtt in bytes
     this.cwnd = INIT_CWND * MSS;
 
     // the congestion timeout
-    this.cto = 1;
+    this.cto = 1000;
     this.currentDelay = new DelayBuffer(CURRENT_HISTORY, CURRENT_HISTORY_INTERVAL);
     this.baseDelay = new DelayBuffer(BASE_HISTORY, BASE_HISTORY_INTERVAL);
 
@@ -91,53 +90,56 @@ class LEDBAT {
   }
 
   digestDelaySamples() {
+    this.checkCTO();
+
     if (this.ackSize === 0) {
-      this.cwnd = MSS;
-      this.cto *= 2;
       return;
     }
 
-    const queuingDelay = this.currentDelay.getMin() - this.baseDelay.getMin();
+    const queuingDelay = Math.abs(this.currentDelay.getMin() - this.baseDelay.getMin());
     const offTarget = (this.target - queuingDelay) / this.target;
-    this.cwnd += GAIN * offTarget * this.ackSize * MSS / this.cwnd;
+    this.cwnd += GAIN * offTarget * this.ackSize * this.mss / this.cwnd;
 
-    const maxAllowedCwnd = this.flightSize + ALLOWED_INCREASE * MSS;
-    this.cwnd = Math.max(Math.min(this.cwnd, maxAllowedCwnd), MIN_CWND * MSS);
+    const maxAllowedCwnd = this.flightSize + ALLOWED_INCREASE * this.mss;
+    this.cwnd = Math.max(Math.min(this.cwnd, maxAllowedCwnd), MIN_CWND * this.mss);
 
     this.flightSize = Math.max(0, this.flightSize - this.ackSize);
     this.ackSize = 0;
   }
 
-  addRttSample(rtt) {
-    this.rtt = rtt;
+  checkCTO() {
+    if (this.flightSize > 0 && Date.now() - this.cto > this.lastAckTime) {
+      this.cwnd = this.mss;
+      this.cto = 2 * this.cto;
+    }
+  }
 
-    this.rttMean.update(rtt);
-    this.rttVar.update(Math.abs(this.rttMean.value() - rtt));
+  addRttSample(rtt) {
+    if (this.rttMean.isEmpty()) {
+      this.rttMean.set(rtt);
+      this.rttVar.set(rtt / 2);
+    } else {
+      this.rttVar.update(Math.abs(this.rttMean.value() - rtt));
+      this.rttMean.update(rtt);
+    }
 
     this.cto = this.rttMean.value() + Math.max(COEF_G, COEF_K * this.rttVar.value());
-    if (this.cto < 1) {
-      this.cto = 1;
+    if (this.cto < 1000) {
+      this.cto = 1000;
     }
   }
 
   onDataLoss(bytes, retransmitting = false) {
     const now = Date.now();
-    if (this.lastDataLoss !== 0 && now - this.lastDataLoss < this.rtt) {
+    if (this.lastDataLoss !== 0 && now - this.lastDataLoss < this.rttMean.value()) {
       return;
     }
     this.lastDataLoss = now;
 
-    this.cwnd = Math.min(this.cwnd, Math.max(this.cwnd / 2, MIN_CWND * MSS));
+    this.cwnd = Math.min(this.cwnd, Math.max(this.cwnd / 2, MIN_CWND * this.mss));
 
     if (!retransmitting) {
       this.flightSize = Math.max(0, this.flightSize - bytes);
-    }
-  }
-
-  checkAcks() {
-    if (this.flightSize > 0 && Date.now() - this.cto > this.lastAckTime) {
-      this.cwnd = MSS;
-      this.cto = 2 * this.cto;
     }
   }
 

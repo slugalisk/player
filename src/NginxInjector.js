@@ -6,11 +6,13 @@ const path = require('path');
 const fs = require('fs');
 const Injector = require('./ppspp/injector');
 const {EventEmitter} = require('events');
+const {ChunkedWriteStream} = require('./chunkedStream');
 
 class NginxInjector extends EventEmitter {
   constructor() {
     super();
     this.injectors = {};
+    this.writers = {};
   }
 
   handleConnect(req, res) {
@@ -28,6 +30,7 @@ class NginxInjector extends EventEmitter {
       // res.status(200).send('');
       res.redirect('memes');
 
+      this.writers[req.body.name] = new ChunkedWriteStream(injector);
       this.injectors[req.body.name] = injector;
       this.emit('publish', injector);
     });
@@ -52,8 +55,9 @@ class NginxInjector extends EventEmitter {
     fs.readFile(filename, {}, (err, data) => {
       console.log(streamName, chunkId, err, data.length);
 
-      if (this.injectors[streamName] !== undefined) {
-        this.injectors[streamName].appendChunk(data);
+      const writer = this.writers[streamName];
+      if (writer !== undefined) {
+        writer.write(data);
       }
     });
   }

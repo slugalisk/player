@@ -63,19 +63,19 @@ class BitArray {
     this.unsafelySetRange(start, end, value);
   }
 
-  unsafelySetRange(start, end, value = true) {
+  unsafelySetRange(start, end, value = true, fillEndByte = false) {
     if (end - start >= this.capacity) {
       this.values.fill(value ? 255 : 0);
       return;
     }
 
     const startByteIndex = this.getByteIndex(start);
-    const endByteIndex = this.getByteIndex(end);
+    const endByteIndex = fillEndByte ? this.values.length : this.getByteIndex(end);
 
-    if (startByteIndex > endByteIndex) {
+    if (startByteIndex > this.getByteIndex(end - 1)) {
       const ringSize = this.values.length * 8;
       this.unsafelySetRange(Math.floor(end / ringSize) * ringSize, end, value);
-      this.unsafelySetRange(start, Math.ceil(start / ringSize) * ringSize - 1, value);
+      this.unsafelySetRange(start, Math.ceil(start / ringSize) * ringSize, value, true);
       return;
     }
 

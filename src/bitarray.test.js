@@ -37,10 +37,25 @@ it('setRange', () => {
   expect(b.toValueArray()).toEqual([47, 48, 49, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110]);
 });
 
-it('setRangeSingle', () => {
-  const b = new BitArray(1221);
+it('setRange with single value sets last bit when wrapping', () => {
+  let b = new BitArray(1221);
+
   b.setRange(3671, 3672);
-  expect(b.get(3671)).toEqual(true);
+  expect(b.toValueArray()).toEqual([3671]);
+});
+
+it('setRange with multiple values sets last bit when wrapping', () => {
+  let b = new BitArray(1221);
+
+  b.setRange(3671, 3673);
+  expect(b.toValueArray()).toEqual([3671, 3672]);
+});
+
+it('setRange with large range when wrapping', () => {
+  let b = new BitArray(6563);
+
+  b.setRange(6528, 6592);
+  expect(b.toValueArray()).toEqual((new Array(64).fill()).map((_, i) => i + 6528));
 });
 
 it ('get', () => {

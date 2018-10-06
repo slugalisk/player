@@ -1,5 +1,6 @@
 import React, {Component} from 'react';
 import URI from './ppspp/uri';
+import SwarmPlayer from './SwarmPlayer';
 import './App.css';
 
 class App extends Component {
@@ -15,7 +16,9 @@ class App extends Component {
     console.log(this.state.swarmUri);
     const uri = URI.parse(this.state.swarmUri);
     console.log('joining', uri);
-    this.props.ppsppClient.joinSwarm(uri);
+
+    const swarm = this.props.ppsppClient.joinSwarm(uri);
+    this.setState({swarm});
   }
 
   onInputChange = e => {
@@ -23,6 +26,10 @@ class App extends Component {
   }
 
   render() {
+    if (this.state.swarm) {
+      return <SwarmPlayer swarm={this.state.swarm} />;
+    }
+
     return (
       <React.Fragment>
         <div className="idle">

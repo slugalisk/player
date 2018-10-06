@@ -309,7 +309,6 @@ class SchedulerPeerState {
     this.invalidChunks = 0;
 
     this.requestQueue = [];
-    this.lastDataOutTime = 0;
   }
 }
 
@@ -336,26 +335,19 @@ class Scheduler {
     // request timeout/cancel
     // send timeout/cancel?
 
-    this.peerStates = {};
-    this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
-    this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
-    this.peerCount = 0;
-    // this.windowStart = 0;
-    // this.windowEnd = 0;
-    this.chunkRate = new ChunkRateMeter();
     // average stream bit rate
     // position in available window
     // position in theoretical window
 
-    // how do we know what range we want urgently...? we sort of need to
-    // know the video bitrate...
-
-    // do we just want to look at have range * chunk size / time?
-
-    this.finishedUpToBin = 0;
-    this.lastAvailableBin = 0;
-
     // minimum needed bin
+
+    this.peerStates = {};
+    this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
+    this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
+    this.peerCount = 0;
+
+    this.chunkRate = new ChunkRateMeter();
+
 
     this.requestQueue = new RequestQueue(uploadRateLimit / 1000);
 
@@ -364,10 +356,9 @@ class Scheduler {
 
     this.timers = {};
 
-    this.minIncompleteBin = -Infinity;
+    this.lastExportedBin = -Infinity;
+    this.lastCompletedBin = -Infinity;
     this.requestedChunks = new AvailabilityMap(liveDiscardWindow);
-
-    // this.updateMemes();
 
     this.totalSends = 0;
     this.totalRequests = 0;
@@ -376,6 +367,7 @@ class Scheduler {
     this.totalAdded = 0;
     this.totalCancelled = 0;
     this.ackUnknownSend = 0;
+    this.totalDroppedRequests = 0;
     this.sendDelay = new EMA(0.05);
     setInterval(this.debug.bind(this), 1000);
 
@@ -397,7 +389,7 @@ class Scheduler {
         availableChunks.min(),
         isFinite(firstLoadedChunk) ? firstLoadedChunk : -Infinity,
         isFinite(firstRequestedChunk) ? firstLoadedChunk : -Infinity,
-        this.minIncompleteBin,
+        this.lastCompletedBin,
       );
       const lastAvailableBin = Math.min(availableChunks.max(), startBin + this.liveDiscardWindow * 2);
 
@@ -471,11 +463,12 @@ class Scheduler {
       totalSends: this.totalSends,
       totalRequests: this.totalRequests,
       totalRequestsReceived: this.totalRequestsReceived,
+      totalDroppedRequests: this.totalDroppedRequests,
       totalReceived: this.totalReceived,
       totalAdded: this.totalAdded,
       totalCancelled: this.totalCancelled,
       ackUnknownSend: this.ackUnknownSend,
-      minIncompleteBin: this.minIncompleteBin,
+      minIncompleteBin: this.lastCompletedBin,
       sendDelay: this.sendDelay.value(),
       picker_firstLoadedChunk: this.loadedChunks.min(),
       picker_firstRequestedChunk: this.requestedChunks.min(),
@@ -487,34 +480,8 @@ class Scheduler {
     // this.ackUnknownSend = 0;
     this.totalAdded = 0;
     this.totalCancelled = 0;
+    this.totalDroppedRequests = 0;
   }
-
-  start() {
-    // this.updateIvl = setInterval(this.update.bind(this), 150);
-
-  }
-
-  stop() {
-    // clearInterval(this.updateIvl);
-  }
-
-  scoreBin(bin) {
-
-  }
-
-  // updateMemes() {
-  //   const firstAvailableChunk = Math.min(
-  //     ...Object.values(this.peerStates)
-  //       .map(({availableChunks}) => availableChunks.min()),
-  //   );
-  //   if (firstAvailableChunk === Infinity) {
-  //     return;
-  //   }
-
-  //   console.log(firstAvailableChunk);
-
-  //   setTimeout(() => this.updateMemes(), 1000);
-  // }
 
   update(peerState) {
     if (!peerState.peer.isReady()) {
@@ -530,42 +497,23 @@ class Scheduler {
 
     ledbat.digestDelaySamples();
 
-    // const firstLoadedChunk = this.loadedChunks.min();
-    // // const firstRequestedChunk = this.requestedChunks.min();
-    // const startBin = Math.max(
-    //   availableChunks.min(),
-    //   isFinite(firstLoadedChunk) ? firstLoadedChunk : -Infinity,
-    //   // isFinite(firstRequestedChunk) ? firstLoadedChunk : -Infinity,
-    //   this.minIncompleteBin,
-    // );
-    // const lastAvailableBin = Math.min(availableChunks.max(), startBin + this.liveDiscardWindow * 2);
+    const now = Date.now();
+    const planFor = ledbat.rttMean.value();
+    const timeoutThreshold = now - ledbat.cto * 2;
 
-    // console.log(startBin, lastAvailableBin);
-
-    // const requestAddresses = [];
-    // for (let i = startBin; i < lastAvailableBin; i += 2) {
-    //   const address = new Address(i);
-    //   if (!this.loadedChunks.get(address)
-    //     && !this.requestedChunks.get(address)
-    //     && availableChunks.get(address)) {
-
-    //     requestAddresses.push(address);
-    //     sentRequests.insert(address);
-    //     this.requestedChunks.set(address);
-
-    //     // if (requestAddresses.length * this.chunkSize >= ledbat.cwnd) {
-    //     //   break;
-    //     // }
+    // let cancelledSends = 0;
+    // while (true) {
+    //   const next = peerState.requestedChunks.peek();
+    //   if (next === undefined || next.sentAt > timeoutThreshold) {
+    //     break;
     //   }
+    //   peerState.requestedChunks.pop();
+    //   cancelledSends ++;
     // }
-
-    // const now = Date.now();
-    // let removed = 0;
-
-    // console.log({removed});
-
-    const planFor = Math.min(1000, ledbat.rttMean.value() * 4);
-    const timeoutThreshold = Date.now() - planFor * 2;
+    // if (cancelledSends > 0) {
+    //   ledbat.onDataLoss(cancelledSends * this.chunkSize);
+    // }
+    // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
 
     const cancelledRequests = [];
     while (true) {
@@ -578,20 +526,18 @@ class Scheduler {
 
     if (cancelledRequests.length > 0) {
       this.totalCancelled += cancelledRequests.length;
-      // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
       cancelledRequests.forEach(({address}) => sentRequests.remove(address));
     }
 
     const dip = peerState.chunkIntervalMean.value() || 0;
     const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
-
     const cwnd = firstPlanPick - sentRequests.length;
 
     const startBin = Math.max(
       this.loadedChunks.values.offset * 2 + 2,
       this.requestedChunks.values.offset * 2 + 2,
       availableChunks.min(),
-      this.minIncompleteBin,
+      this.lastCompletedBin,
     );
     const endBin = Math.min(
       startBin + this.liveDiscardWindow * 2,
@@ -613,16 +559,17 @@ class Scheduler {
         }
       }
     }
+    if (this.lastCompletedBin === -Infinity && requestAddresses.length !== 0) {
+      const firstRequestedBin = requestAddresses[0].bin;
+      this.lastCompletedBin = firstRequestedBin;
+      this.lastExportedBin = firstRequestedBin - 2;
+    }
 
-    if (cancelledRequests.length > 0) {
+    if (cancelledRequests.length !== 0) {
       cancelledRequests.forEach(({address}) => {
         this.requestedChunks.set(address, false);
         peerState.peer.sendCancel(address);
       });
-    }
-
-    if (this.minIncompleteBin === -Infinity && requestAddresses.length !== 0) {
-      this.minIncompleteBin = requestAddresses[0].bin;
     }
 
     if (requestAddresses.length !== 0) {
@@ -630,14 +577,7 @@ class Scheduler {
       peerState.peer.sendRequest(...requestAddresses);
     }
 
-    let sendInterval = (ledbat.rttMean.value() || 0) / (ledbat.cwnd / this.chunkSize);
-    const luft = sendInterval * 4;
-    const now = Date.now();
-
-    // TODO: retry/abort send
-    // if (ledbat.flightSize < ledbat.cwnd && peerState.lastDataOutTime + sendInterval <= now + luft) {
-
-    if (peerState.lastDataOutTime + sendInterval <= now + luft) {
+    while (ledbat.flightSize < ledbat.cwnd && peerState.requestQueue.length) {
       const requestedAddress = peerState.requestQueue.shift();
       if (requestedAddress !== undefined) {
         const requestedChunk = peerState.requestedChunks.get(requestedAddress);
@@ -648,52 +588,14 @@ class Scheduler {
           this.totalSends ++;
         }
       }
-      peerState.lastDataOutTime = now;
+
+      // TODO: volunteer bin we have and they don't?
     }
 
     peerState.peer.flush();
-
-    const timeout = Math.min(ledbat.rttMean.value() / (ledbat.cwnd / this.chunkSize), 1000);
-    this.timers[peerState.localId] = setTimeout(() => this.update(peerState), timeout);
+    let sendInterval = Math.min(1000, (ledbat.rttMean.value() || 0) / (ledbat.cwnd / this.chunkSize));
+    this.timers[peerState.localId] = setTimeout(() => this.update(peerState), sendInterval);
   }
-
-  // scheduleSend(reschedule = false) {
-  //   const request = this.requestQueue.peek();
-  //   if (request === null) {
-  //     this.nextSendTimeout = 0;
-  //     return;
-  //   }
-
-  //   const {virtualFinish} = request.task;
-  //   if (!reschedule && virtualFinish > this.nextSendTime && this.nextSendTimeout !== 0) {
-  //     return;
-  //   }
-  //   clearTimeout(this.nextSendTimeout);
-
-  //   const delay = Math.min(10, Math.max(0, Math.max(Date.now(), this.nextSendTime) - virtualFinish));
-  //   this.sendDelay.update(delay);
-  //   this.nextSendTimeout = setTimeout(() => this.doSend(), delay);
-  //   this.nextSendTime = virtualFinish;
-  // }
-
-  // doSend() {
-  //   const request = this.requestQueue.dequeue();
-  //   if (request === null) {
-  //     return;
-  //   }
-
-  //   const peerState = this.peerStates[request.flow.id];
-  //   const requestedChunk = peerState.requestedChunks.get(request.task.value);
-  //   if (peerState !== undefined && requestedChunk !== undefined) {
-  //     requestedChunk.sentAt = Date.now();
-  //     peerState.ledbat.addSent(this.chunkSize);
-  //     this.totalSends ++;
-
-  //     peerState.peer.sendChunk(request.task.value);
-  //   }
-
-  //   this.scheduleSend(true);
-  // }
 
   addPeer(peer) {
     const {localId} = peer;
@@ -755,13 +657,9 @@ class Scheduler {
     peerState.lastChunkTime = now;
 
     const rtt = now - request.createdAt;
-    if (isNaN(rtt)) {
-      debugger;
-    } else {
-      peerState.ledbat.addRttSample(rtt);
-      // peerState.rttMean.update(rtt);
-      // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
-    }
+    peerState.ledbat.addRttSample(rtt);
+    // peerState.rttMean.update(rtt);
+    // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
 
     // TODO: double check LEDBAT to make sure we shouldn't be doing
     // something here
@@ -778,9 +676,8 @@ class Scheduler {
     this.chunkRate.update(address);
     this.loadedChunks.set(address);
 
-    for (let i = this.minIncompleteBin; this.loadedChunks.get(new Address(i)); i += 2) {
-      this.minIncompleteBin = i;
-      // console.log(i, this.loadedChunks.get(new Address(i)));
+    for (let i = this.lastCompletedBin; this.loadedChunks.get(new Address(i)); i += 2) {
+      this.lastCompletedBin = i;
     }
 
     Object.values(this.peerStates).forEach(({availableChunks, peer}) => {
@@ -790,8 +687,16 @@ class Scheduler {
     });
   }
 
+  getNewCompleteBins() {
+    const nextExportedBin = this.lastExportedBin + 2;
+    if (nextExportedBin <= this.lastCompletedBin) {
+      this.lastExportedBin = this.lastCompletedBin;
+      return [nextExportedBin, this.lastCompletedBin];
+    }
+  }
+
   markChunkRejected(peer, address) {
-    this.reschedule(address);
+    this.requestedChunks.set(address, false);
     this.getPeerState(peer).invalidChunks ++;
   }
 
@@ -817,51 +722,47 @@ class Scheduler {
   }
 
   markSendAcked(peer, address, delaySample) {
-    // TODO: is this an address we sent to this peer?
-
     const peerState = this.getPeerState(peer);
+
+    peerState.ledbat.addDelaySample(delaySample, this.chunkSize);
+
     const sentChunk = peerState.requestedChunks.get(address);
     if (sentChunk === undefined) {
       this.ackUnknownSend ++;
       return;
     }
 
-    const rtt = Date.now() - sentChunk.sentAt;
-
-    peerState.ledbat.addRttSample(rtt);
-    peerState.ledbat.addDelaySample(delaySample, this.chunkSize);
+    // TODO: is this necessary?
+    if (sentChunk.sentAt) {
+      peerState.ledbat.addRttSample(Date.now() - sentChunk.sentAt);
+    }
 
     peerState.requestedChunks.remove(address);
   }
 
   enqueueRequest(peer, address) {
-    // this.totalRequestsReceived ++;
-    // this.requestQueue.enqueue(
-    //   this.getPeerState(peer).requestFlow,
-    //   this.chunkSize * (address.end - address.start + 1),
-    //   address,
-    // );
+    const peerState = this.getPeerState(peer);
 
     for (let i = address.start; i <= address.end; i += 2) {
       this.totalRequestsReceived ++;
-      // this.requestQueue.enqueue(
-      //   this.getPeerState(peer).requestFlow,
-      //   this.chunkSize,
-      //   new Address(i),
-      // );
-      this.getPeerState(peer).requestQueue.push(new Address(i));
+      peerState.requestQueue.push(new Address(i));
     }
 
-    const {requestedChunks} = this.getPeerState(peer);
-    requestedChunks.insert(address);
-    // this.scheduleSend();
+    peerState.requestedChunks.insert(address);
   }
 
   cancelRequest(peer, address) {
-    this.requestQueue.cancel(
-      this.getPeerState(peer).requestFlow,
-      ({bin}) => address.containsBin(bin),
-    );
+    const peerState = this.getPeerState(peer);
+    const requestedChunk = peerState.requestedChunks.get(address);
+    if (requestedChunk && requestedChunk.sentAt) {
+      peerState.ledbat.onDataLoss(this.chunkSize);
+    }
+    peerState.requestedChunks.remove(address);
+
+    // this.requestQueue.cancel(
+    //   this.getPeerState(peer).requestFlow,
+    //   ({bin}) => address.containsBin(bin),
+    // );
   }
 }
 

@@ -29,8 +29,10 @@ const genericEncoding = createEncoding();
 const BUFFER_SIZE = 1e7;
 const MAX_UPLOAD_RATE = 1e6;
 
-class Swarm {
+class Swarm extends EventEmitter {
   constructor(uri, clientOptions) {
+    super();
+
     const {swarmId} = uri;
     const {
       [ProtocolOptions.ContentIntegrityProtectionMethod]: contentIntegrityProtectionMethod,
@@ -87,6 +89,18 @@ class Swarm {
           throw new Error(`invalid peer options: ${protocolOptionName} mismatch`);
         }
       });
+  }
+
+  emitNewData() {
+    const newBins = this.scheduler.getNewCompleteBins();
+    if (newBins !== undefined) {
+      const [minNewBin, maxNewBin] = newBins;
+      const chunks = [];
+      for (let i = minNewBin; i <= maxNewBin; i += 2) {
+        chunks.push(this.chunkBuffer.get(new Address(i)));
+      }
+      this.emit('data', chunks);
+    }
   }
 }
 
@@ -223,14 +237,12 @@ class Peer {
       this.remoteId,
       [new encoding.AckMessage(message.address, new encoding.Timestamp(delaySample))],
     ));
-    // this.sendBuffer.push(new encoding.AckMessage(message.address, new encoding.Timestamp(delaySample)));
 
     context.getContentIntegrityVerifier(address).verifyChunk(address, message.data)
       .then(() => {
-        // TODO: use munro to estimate chunk rate
-        this.swarm.scheduler.markChunkVerified(this, address);
-
         this.swarm.chunkBuffer.set(address, message.data);
+        this.swarm.scheduler.markChunkVerified(this, address);
+        this.swarm.emitNewData();
       })
       .catch((err) => {
         console.log('error validating chunk', err);
@@ -303,13 +315,13 @@ class Peer {
       return;
     }
 
-    const {encoding} = this.swarm;
-
     // TODO: omit signatures for bins the peer has already acked
     const constituentSignatures = this.swarm.contentIntegrity.getConstituentSignatures(address);
     if (constituentSignatures === undefined) {
       return;
     }
+
+    const {encoding} = this.swarm;
 
     constituentSignatures
       .reverse()
@@ -405,7 +417,10 @@ class Client {
       uploadRateLimit: MAX_UPLOAD_RATE,
     };
 
-    this.swarms.insert(new Swarm(uri, clientOptions));
+    const swarm = new Swarm(uri, clientOptions);
+    this.swarms.insert(swarm);
+
+    return swarm;
   }
 
   createChannel(wrtcChannel) {
