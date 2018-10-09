@@ -1,4 +1,5 @@
 import BitArray from './bitarray';
+// import formatByte from './utils/formatbyte';
 
 it('set', () => {
   const b = new BitArray(64);
@@ -19,6 +20,49 @@ it('set', () => {
   expect(b.toValueArray()).toEqual([100, 118, 119]);
 });
 
+it('set iteratively', () => {
+  const b = new BitArray(64);
+
+  for (let i = 0; i < 100; i ++) {
+    b.set(i);
+    expect(b.get(i) ? i : 0).toEqual(i);
+  }
+});
+
+it('set iteratively with odd array size', () => {
+  const b = new BitArray(51);
+
+  for (let i = 0; i < 100; i ++) {
+    b.set(i);
+    expect(b.get(i) ? i : 0).toEqual(i);
+  }
+});
+
+it('setRange iteratively', () => {
+  const b = new BitArray(64);
+
+  for (let i = 0; i < 100; i ++) {
+    b.setRange(i, i + 1);
+    expect(b.get(i) ? i : 0).toEqual(i);
+  }
+});
+
+it('setRange iteratively with odd array size', () => {
+  const b = new BitArray(51);
+
+  for (let i = 0; i < 100; i ++) {
+    b.setRange(i, i + 1);
+    expect(b.get(i) ? i : 0).toEqual(i);
+  }
+});
+
+it('set off', () => {
+  const b = new BitArray(64);
+
+  b.setRange(0, 64);
+  expect(b.toValueArray()).toEqual(new Array(64).fill(0).map((_, i) => i + 1));
+});
+
 it('unset', () => {
   const b = new BitArray(64);
 
@@ -34,7 +78,7 @@ it('setRange', () => {
   expect(b.toValueArray()).toEqual([40, 41, 42, 43, 44, 45, 46, 47, 48, 49]);
 
   b.setRange(100, 110);
-  expect(b.toValueArray()).toEqual([47, 48, 49, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110]);
+  expect(b.toValueArray()).toEqual([47, 48, 49, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109]);
 });
 
 it('setRange with single value sets last bit when wrapping', () => {
@@ -56,6 +100,13 @@ it('setRange with large range when wrapping', () => {
 
   b.setRange(6528, 6592);
   expect(b.toValueArray()).toEqual((new Array(64).fill()).map((_, i) => i + 6528));
+});
+
+it('setRange some other shit', () => {
+  let b = new BitArray(6563);
+
+  b.setRange(52544, 52608);
+  expect(b.toValueArray()).toEqual((new Array(64).fill()).map((_, i) => i + 52544));
 });
 
 it ('get', () => {

@@ -33,11 +33,15 @@ class BitArray {
     }
 
     this.offset += distance;
-    this.unsafelySetRange(offset + 1, offset + distance, false);
+    this.unsafelySetRange(offset + 1, offset + distance + 1, false);
   }
 
   getByteIndex(index) {
     return Math.floor(index / 8) % this.values.length;
+  }
+
+  getBitIndex(index) {
+    return index % 8;
   }
 
   getIndexValue(byteIndex, bitIndex) {
@@ -70,17 +74,22 @@ class BitArray {
     }
 
     const startByteIndex = this.getByteIndex(start);
-    const endByteIndex = fillEndByte ? this.values.length : this.getByteIndex(end);
+    const endByteIndex = this.getByteIndex(end);
+    const startBitIndex = this.getBitIndex(start);
+    const endBitIndex = this.getBitIndex(end);
 
-    if (startByteIndex > this.getByteIndex(end - 1)) {
-      const ringSize = this.values.length * 8;
-      this.unsafelySetRange(Math.floor(end / ringSize) * ringSize, end, value);
-      this.unsafelySetRange(start, Math.ceil(start / ringSize) * ringSize, value, true);
+    if (startByteIndex > endByteIndex) {
+      this.unsafelySetIndexRange(startByteIndex, startBitIndex, this.capacity, 0, value);
+      this.unsafelySetIndexRange(0, 0, endByteIndex, endBitIndex, value);
       return;
     }
 
-    let startMask = createMask(8 - (start % 8));
-    let endMask = 255 ^ createMask(8 - (end % 8));
+    this.unsafelySetIndexRange(startByteIndex, startBitIndex, endByteIndex, endBitIndex, value);
+  }
+
+  unsafelySetIndexRange(startByteIndex, startBitIndex, endByteIndex, endBitIndex, value) {
+    let startMask = createMask(8 - startBitIndex);
+    let endMask = 255 ^ createMask(8 - endBitIndex);
 
     if (startByteIndex === endByteIndex) {
       const mask = startMask & endMask;
@@ -108,7 +117,7 @@ class BitArray {
     this.adjustOffset(index);
 
     const byteIndex = this.getByteIndex(index);
-    const mask = 1 << (7 - (index % 8));
+    const mask = 1 << (7 - this.getBitIndex(index));
     this.values[byteIndex] = applyMask(this.values[byteIndex], mask, value);
   }
 
@@ -122,7 +131,7 @@ class BitArray {
     }
 
     const byteIndex = this.getByteIndex(index);
-    const mask = 1 << (7 - (index % 8));
+    const mask = 1 << (7 - this.getBitIndex(index));
     return (this.values[byteIndex] & mask) !== 0;
   }
 

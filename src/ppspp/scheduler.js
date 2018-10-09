@@ -343,6 +343,7 @@ class Scheduler {
 
     this.peerStates = {};
     this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
+    this.definitelyLoadedChunks = [];
     this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
     this.peerCount = 0;
 
@@ -673,6 +674,7 @@ class Scheduler {
 
     // this.chunkStates.advanceLastBin(address.end);
 
+    this.definitelyLoadedChunks.push(address.bin);
     this.chunkRate.update(address);
     this.loadedChunks.set(address);
 

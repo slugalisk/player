@@ -33,8 +33,10 @@ const bootstrap = new WebSocketBootstrap(address);
 
 bootstrap.on('bootstrap', ({data, conn}) => {
   const ppsppDataChannelOptions = {
-    ordered: false,
-    maxRetransmits: 0,
+    // ordered: false,
+    // maxRetransmits: 0,
+    ordered: true,
+    maxRetransmits: 10,
   };
 
   const mediator = new wrtc.Mediator(conn);

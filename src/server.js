@@ -9,7 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const arrayBufferToHex = require('array-buffer-to-hex');
 const NginxInjector = require('./NginxInjector');
-// const {ChunkedWriteStream} = require('./chunkedStream');
+// const {ChunkedWriteStreamInjector} = require('./chunkedStream');
 const dht = require('./dht');
 const ppspp = require('./ppspp');
 const wrtc = require('./wrtc');
@@ -72,6 +72,7 @@ function generateId(addr) {
 }
 
 const injector = new NginxInjector();
+// const injector = new ChunkedWriteStreamInjector();
 injector.start();
 
 injector.on('publish', ({swarm}) => {

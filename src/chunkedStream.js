@@ -1,5 +1,5 @@
 const {EventEmitter} = require('events');
-// const Injector = require('./ppspp/injector');
+const Injector = require('./ppspp/injector');
 
 const DELIMITER = Buffer.from('4c93bf00ae13c37e5df3b7a9cea0413521fe1b08a627d065d7180b9d0738c666', 'hex');
 const DELIMITER_LENGTH = DELIMITER.length;
@@ -10,25 +10,6 @@ class ChunkedWriteStream extends EventEmitter {
     super();
     this.injector = injector;
   }
-
-  // start() {
-  //   const data = Buffer.alloc((3500000 / 8) * (250 / 1000));
-  //   data.fill(255);
-
-  //   Injector.create().then(injector => {
-  //     this.intervalId = setInterval(() => this.write(data), 250);
-  //     this.injector = injector;
-  //     this.emit('publish', injector);
-  //   });
-  // }
-
-  // stop(done) {
-  //   clearInterval(this.intervalId);
-  //   this.emit('unpublish', this.injector);
-  //   if (done) {
-  //     setTimeout(done);
-  //   }
-  // }
 
   write(buffer) {
     const length = Buffer.alloc(4);
@@ -46,6 +27,29 @@ class ChunkedWriteStream extends EventEmitter {
     ));
 
     this.injector.appendData(buffer);
+  }
+}
+
+class ChunkedWriteStreamInjector extends EventEmitter {
+  start() {
+    const data = Buffer.alloc((3500000 / 8) * (250 / 1000));
+    data.fill(255);
+
+    Injector.create().then(injector => {
+      this.injector = injector;
+
+      const writer = new ChunkedWriteStream(injector);
+      this.intervalId = setInterval(() => writer.write(data), 250);
+      this.emit('publish', injector);
+    });
+  }
+
+  stop(done) {
+    clearInterval(this.intervalId);
+    this.emit('unpublish', this.injector);
+    if (done) {
+      setTimeout(done);
+    }
   }
 }
 
@@ -143,5 +147,6 @@ class ChunkedReadStream extends EventEmitter {
 
 module.exports = {
   ChunkedWriteStream,
+  ChunkedWriteStreamInjector,
   ChunkedReadStream,
 };

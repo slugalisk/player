@@ -11,8 +11,6 @@ class SwarmPlayer extends Component {
   constructor(props) {
     super(props);
     this.video = React.createRef();
-    this.media = [];
-    this.mediaIndex = 0;
   }
 
   componentDidMount() {
@@ -66,7 +64,11 @@ class SwarmPlayer extends Component {
 
   render() {
     return (
-      <video controls className="swarm-player-video" ref={this.video} />
+      <video
+        controls
+        className="swarm-player-video"
+        ref={this.video}
+      />
     );
   }
 }
