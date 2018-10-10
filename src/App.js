@@ -1,7 +1,7 @@
 import React, {Component} from 'react';
 import URI from './ppspp/uri';
 import SwarmPlayer from './SwarmPlayer';
-import {ChunkedReadStream} from './chunkedStream';
+// import {ChunkedReadStream} from './chunkedStream';
 import './App.css';
 
 class App extends Component {
@@ -19,8 +19,7 @@ class App extends Component {
     console.log('joining', uri);
 
     const swarm = this.props.ppsppClient.joinSwarm(uri);
-    const stream = new ChunkedReadStream(swarm);
-    console.log(stream);
+    // const stream = new ChunkedReadStream(swarm);
     // stream.on('data', d => console.log(`received ${d.length} bytes`));
     this.setState({swarm});
   }

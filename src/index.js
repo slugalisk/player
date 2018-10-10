@@ -14,7 +14,8 @@ class WebSocketBootstrap extends EventEmitter {
   constructor(address) {
     super();
 
-    const conn = new WebSocket('ws://' + address);
+    const protocol = window.location.protocol === 'https' ? 'wss' : 'ws';
+    const conn = new WebSocket(`${protocol}://${address}`);
     conn.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'bootstrap') {
@@ -28,7 +29,9 @@ class WebSocketBootstrap extends EventEmitter {
 
 // TODO: ensure some supernode connection
 
-const address = window.location.hostname + ':8080';
+const address = process.env.NODE_ENV === 'development'
+  ? window.location.hostname + ':8080'
+  : window.location.host;
 const bootstrap = new WebSocketBootstrap(address);
 
 bootstrap.on('bootstrap', ({data, conn}) => {

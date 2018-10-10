@@ -1,6 +1,6 @@
 import React, {Component} from 'react';
 import muxjs from 'mux.js';
-import {ChunkedReadStream} from './chunkedStream';
+import {ChunkedFragmentedReadStream} from './chunkedStream';
 import './SwarmPlayer.css';
 
 const {Buffer} = require('buffer');
@@ -55,9 +55,11 @@ class SwarmPlayer extends Component {
       }
     });
 
-    const stream = new ChunkedReadStream(this.props.swarm);
-    stream.on('data', data => {
-      data.chunks.forEach(chunk => transmuxer.push(new Uint8Array(chunk)));
+    const stream = new ChunkedFragmentedReadStream(this.props.swarm);
+    stream.on('start', data => transmuxer.push(new Uint8Array(data)));
+    stream.on('data', data => transmuxer.push(new Uint8Array(data)));
+    stream.on('end', data => {
+      transmuxer.push(new Uint8Array(data));
       transmuxer.flush();
     });
   };

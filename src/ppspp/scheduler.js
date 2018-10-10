@@ -370,7 +370,7 @@ class Scheduler {
     this.ackUnknownSend = 0;
     this.totalDroppedRequests = 0;
     this.sendDelay = new EMA(0.05);
-    setInterval(this.debug.bind(this), 1000);
+    // setInterval(this.debug.bind(this), 1000);
 
     this.nextSendTime = 0;
     this.nextSendTimeout = 0;

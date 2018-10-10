@@ -53,36 +53,34 @@ class ChunkedWriteStreamInjector extends EventEmitter {
   }
 }
 
-class ChunkedReadStream extends EventEmitter {
+class AbstractChunkedReadStream extends EventEmitter {
   constructor(swarm) {
     super();
 
     this.swarm = swarm;
 
-    this.handleWarmupData = this.handleWarmupData.bind(this);
-    this.handleData = this.handleData.bind(this);
+    this.handleWarmupSwarmData = this.handleWarmupSwarmData.bind(this);
+    this.handleSwarmData = this.handleSwarmData.bind(this);
 
-    // TODO: abstract chunk slice handling to rope
-    this.chunkBuffer = [];
     this.chunkBufferLength = 0;
     this.nextDataOffset = 0;
     this.nextDataLength = 0;
 
-    this.swarm.on('data', this.handleWarmupData);
+    this.swarm.on('data', this.handleWarmupSwarmData);
   }
 
-  handleWarmupData(data) {
+  handleWarmupSwarmData(data) {
     for (let i = 0; i < data.length; i ++) {
       const delimiterIndex = data[i].indexOf(DELIMITER);
       if (delimiterIndex === -1 || delimiterIndex + HEADER_INSTANCE_LENGTH > data[i].length) {
         continue;
       }
 
-      this.swarm.removeListener('data', this.handleWarmupData);
-      this.swarm.on('data', this.handleData);
+      this.swarm.removeListener('data', this.handleWarmupSwarmData);
+      this.swarm.on('data', this.handleSwarmData);
 
       this.readHeader(data[i], delimiterIndex);
-      this.handleData(data.slice(i));
+      this.handleSwarmData(data.slice(i));
 
       break;
     }
@@ -94,59 +92,105 @@ class ChunkedReadStream extends EventEmitter {
     this.nextDataLength = data.readUInt32BE(offset + DELIMITER_LENGTH + 1);
   }
 
-  handleData(data) {
+  handleSwarmData(data) {
     for (let i = 0; i < data.length; i ++) {
       const lastChunkOffset = this.chunkBufferLength;
 
-      this.chunkBuffer.push(data[i]);
       this.chunkBufferLength += data[i].length;
 
       const nextDataEnd = this.nextDataOffset + this.nextDataLength;
       if (this.chunkBufferLength < nextDataEnd) {
+        this.handleData(data[i], lastChunkOffset);
         continue;
       }
 
-      // trim export data range and emit
-      const chunkSlice = this.chunkBuffer.slice();
-
       const lastChunkEnd = nextDataEnd - lastChunkOffset;
-      chunkSlice[chunkSlice.length - 1] = chunkSlice[chunkSlice.length - 1].slice(0, lastChunkEnd);
+      this.handleEndData(data[i], lastChunkEnd);
 
-      let firstChunkStart = this.nextDataOffset;
-      if (firstChunkStart > chunkSlice[0].length) {
-        firstChunkStart -= chunkSlice[0].length;
-        chunkSlice.shift();
-      }
-      chunkSlice[0] = chunkSlice[0].slice(firstChunkStart);
-
-      this.emit(
-        'data',
-        {
-          chunks: chunkSlice,
-          length: this.nextDataLength,
-        },
-      );
-
-      this.chunkBuffer = [];
-      this.chunkBufferLength = 0;
-
-      // find the next header or defer to handleWarmupData if it hasn't arrived
+      // find the next header or defer to handleWarmupSwarmData if it hasn't arrived
       if (this.chunkBufferLength - nextDataEnd <= HEADER_INSTANCE_LENGTH) {
-        this.swarm.removeListener('data', this.handleData);
-        this.swarm.on('data', this.handleWarmupData);
+        this.swarm.removeListener('data', this.handleSwarmData);
+        this.swarm.on('data', this.handleWarmupSwarmData);
 
-        this.handleWarmupData(data.slice(i));
+        this.chunkBufferLength = 0;
+        this.handleWarmupSwarmData(data.slice(i));
         return;
       }
 
+      this.chunkBufferLength = 0;
       this.readHeader(data[i], lastChunkEnd);
       i--;
     }
   }
 }
 
+class ChunkedFragmentedReadStream extends AbstractChunkedReadStream {
+  constructor(swarm) {
+    super(swarm);
+
+    this.firstEmitted = false;
+  }
+
+  handleData(data, lastChunkOffset) {
+    if (!this.firstEmitted) {
+      if (this.chunkBufferLength > this.nextDataOffset) {
+        this.emit('start', data.slice(this.nextDataOffset - lastChunkOffset));
+        this.firstEmitted = true;
+      }
+
+      return;
+    }
+
+    this.emit('data', data);
+  }
+
+  handleEndData(data, lastChunkEnd) {
+    this.emit('end', data.slice(0, lastChunkEnd));
+    this.firstEmitted = false;
+  }
+}
+
+class ChunkedReadStream extends AbstractChunkedReadStream {
+  constructor(swarm) {
+    super(swarm);
+
+    this.chunkBuffer = [];
+  }
+
+  handleData(data) {
+    this.chunkBuffer.push(data);
+  }
+
+  handleEndData(data, lastChunkEnd) {
+    this.chunkBuffer.push(data);
+
+    // trim export data range and emit
+    const chunkSlice = this.chunkBuffer.slice();
+
+    chunkSlice[chunkSlice.length - 1] = chunkSlice[chunkSlice.length - 1].slice(0, lastChunkEnd);
+
+    let firstChunkStart = this.nextDataOffset;
+    if (firstChunkStart > chunkSlice[0].length) {
+      firstChunkStart -= chunkSlice[0].length;
+      chunkSlice.shift();
+    }
+    chunkSlice[0] = chunkSlice[0].slice(firstChunkStart);
+
+    this.emit(
+      'data',
+      {
+        chunks: chunkSlice,
+        length: this.nextDataLength,
+      },
+    );
+
+    this.chunkBuffer = [];
+  }
+}
+
 module.exports = {
   ChunkedWriteStream,
   ChunkedWriteStreamInjector,
+  ChunkedFragmentedReadStream,
   ChunkedReadStream,
 };
