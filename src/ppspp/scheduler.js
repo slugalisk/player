@@ -370,7 +370,7 @@ class Scheduler {
     this.ackUnknownSend = 0;
     this.totalDroppedRequests = 0;
     this.sendDelay = new EMA(0.05);
-    // setInterval(this.debug.bind(this), 1000);
+    setInterval(this.debug.bind(this), 1000);
 
     this.nextSendTime = 0;
     this.nextSendTimeout = 0;
@@ -379,6 +379,10 @@ class Scheduler {
   debug() {
     console.log('---');
     Object.values(this.peerStates).forEach((peerState) => {
+      if (!peerState.peer.isReady()) {
+        return;
+      }
+
       let cto = peerState.ledbat.cto / (peerState.ledbat.cwnd / this.chunkSize);
       const timeout = Math.ceil(Math.min(cto, 1000));
 
@@ -484,9 +488,9 @@ class Scheduler {
     this.totalDroppedRequests = 0;
   }
 
-  update(peerState) {
+  update(peerState, update) {
     if (!peerState.peer.isReady()) {
-      this.timers[peerState.localId] = setTimeout(() => this.update(peerState), 1000);
+      this.timers[peerState.localId] = setTimeout(update, 1000);
       return;
     }
 
@@ -502,32 +506,16 @@ class Scheduler {
     const planFor = ledbat.rttMean.value();
     const timeoutThreshold = now - ledbat.cto * 2;
 
-    // let cancelledSends = 0;
-    // while (true) {
-    //   const next = peerState.requestedChunks.peek();
-    //   if (next === undefined || next.sentAt > timeoutThreshold) {
-    //     break;
-    //   }
-    //   peerState.requestedChunks.pop();
-    //   cancelledSends ++;
-    // }
-    // if (cancelledSends > 0) {
-    //   ledbat.onDataLoss(cancelledSends * this.chunkSize);
-    // }
-    // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
-
     const cancelledRequests = [];
-    while (true) {
-      const next = sentRequests.peek();
-      if (next === undefined || next.createdAt > timeoutThreshold) {
-        break;
-      }
+    while (sentRequests.peek() !== undefined
+      && sentRequests.peek().createdAt > timeoutThreshold) {
       cancelledRequests.push(sentRequests.pop());
     }
 
     if (cancelledRequests.length > 0) {
       this.totalCancelled += cancelledRequests.length;
       cancelledRequests.forEach(({address}) => sentRequests.remove(address));
+      ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
     }
 
     const dip = peerState.chunkIntervalMean.value() || 0;
@@ -595,7 +583,7 @@ class Scheduler {
 
     peerState.peer.flush();
     let sendInterval = Math.min(1000, (ledbat.rttMean.value() || 0) / (ledbat.cwnd / this.chunkSize));
-    this.timers[peerState.localId] = setTimeout(() => this.update(peerState), sendInterval);
+    this.timers[peerState.localId] = setTimeout(update, sendInterval);
   }
 
   addPeer(peer) {
@@ -607,10 +595,8 @@ class Scheduler {
     const peerState = new SchedulerPeerState(peer, requestFlow);
     this.peerStates[localId] = peerState;
 
-    this.timers[localId] = setTimeout(() => this.update(peerState), 1000);
-    // if (++ this.peerCount === 1) {
-    //   this.start();
-    // }
+    const update = () => this.update(peerState, update);
+    this.timers[localId] = setTimeout(update, 1000);
   }
 
   removePeer({localId}) {
@@ -624,9 +610,6 @@ class Scheduler {
 
     delete this.peerStates[localId];
 
-    // if (-- this.peerCount === 0) {
-    //   this.stop();
-    // }
     clearTimeout(this.timers[localId]);
   }
 

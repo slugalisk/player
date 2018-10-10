@@ -248,6 +248,7 @@ class SubChannel {
     this.client = client;
     this.peerId = peerId;
     this.id = id;
+    this.readyState = SubChannel.ReadyStates.OPEN;
     this.onmessage = () => {};
 
     this.handleMessage = this.handleMessage.bind(this);
@@ -274,9 +275,15 @@ class SubChannel {
   }
 
   close() {
+    this.readyState = SubChannel.ReadyStates.CLOSED;
     this.client.removeListener('receive.subchannel.message', this.handleMessage);
   }
 }
+
+SubChannel.ReadyStates = {
+  OPEN: 1,
+  CLOSED: 3,
+};
 
 module.exports = {
   Client,

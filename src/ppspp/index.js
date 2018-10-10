@@ -426,6 +426,11 @@ class Client {
   createChannel(wrtcChannel) {
     const channel = new Channel(wrtcChannel, this.swarms);
     this.channels.push(channel);
+
+    channel.once('close', () => {
+      const index = this.channels.indexOf(channel);
+      this.channels.splice(index, 1);
+    });
   }
 }
 
@@ -437,23 +442,11 @@ class Channel extends EventEmitter {
     this.swarms = swarms;
     this.peers = {};
 
-    this.channel.onopen = this.handleOpen.bind(this);
-    this.channel.onmessage = this.handleMessage.bind(this);
-    this.channel.onclose = this.handleClose.bind(this);
-    this.channel.onerror = err => console.log('channel error:', err);
+    this.channel.addEventListener('message', this.handleMessage.bind(this));
+    this.channel.addEventListener('error', err => console.log('channel error:', err));
 
     this.handleSwarmInsert = this.handleSwarmInsert.bind(this);
-    // this.handleSwarmRemove = this.handleSwarmRemove.bind(this);
     this.swarms.on('insert', this.handleSwarmInsert);
-    // this.swarms.on('remove', this.handleSwarmRemove);
-  }
-
-  handleOpen() {
-    this.swarms.toArray().forEach(swarm => {
-      // const peer = new Peer(swarm, this);
-      // this.peers[peer.localId] = peer;
-      // peer.init();
-    });
   }
 
   handleMessage(event) {
@@ -494,13 +487,18 @@ class Channel extends EventEmitter {
     peer.handleData(data);
   }
 
-  handleClose() {
-    Object.values(this.peers).forEach(peer => peer.close());
-    this.swarms.removeListener('insert', this.handleSwarmInsert);
+  send(data) {
+    try {
+      this.channel.send(data.toBuffer());
+    } catch (error) {
+      console.log('encountered error while sending', error);
+      this.handleClose();
+    }
   }
 
-  send(data) {
-    this.channel.send(data.toBuffer());
+  handleClose() {
+    Object.values(this.peers).forEach(peer => peer.close());
+    this.emit('close');
   }
 
   handleSwarmInsert(swarm) {

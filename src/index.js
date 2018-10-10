@@ -14,7 +14,7 @@ class WebSocketBootstrap extends EventEmitter {
   constructor(address) {
     super();
 
-    const protocol = window.location.protocol === 'https' ? 'wss' : 'ws';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const conn = new WebSocket(`${protocol}://${address}`);
     conn.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -35,16 +35,11 @@ const address = process.env.NODE_ENV === 'development'
 const bootstrap = new WebSocketBootstrap(address);
 
 bootstrap.on('bootstrap', ({data, conn}) => {
-  const ppsppDataChannelOptions = {
-    // ordered: false,
-    // maxRetransmits: 0,
-    ordered: true,
-    maxRetransmits: 10,
-  };
-
   const mediator = new wrtc.Mediator(conn);
   const client = new wrtc.Client(mediator);
 
+  // TODO: retry?
+  mediator.once('error', () => conn.close());
   client.once('open', () => conn.close());
 
   const dhtClient = new dht.Client(hexToUint8Array(data.id));
@@ -52,7 +47,7 @@ bootstrap.on('bootstrap', ({data, conn}) => {
 
   const bootstrapId = hexToUint8Array(data.bootstrapId);
   dhtClient.createChannel(bootstrapId, client.createDataChannel('dht'));
-  ppsppClient.createChannel(client.createDataChannel('ppspp', ppsppDataChannelOptions));
+  ppsppClient.createChannel(client.createDataChannel('ppspp'));
 
   client.init();
 
@@ -61,22 +56,22 @@ bootstrap.on('bootstrap', ({data, conn}) => {
     const mediator = new wrtc.Mediator(sub);
     const client = new wrtc.Client(mediator);
 
+    mediator.once('error', () => sub.close());
     client.once('open', () => sub.close());
 
     dhtClient.createChannel(id, client.createDataChannel('dht'));
-    ppsppClient.createChannel(client.createDataChannel('ppspp', ppsppDataChannelOptions));
+    ppsppClient.createChannel(client.createDataChannel('ppspp'));
 
     dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
   }));
 
   dhtClient.on('receive.connect.request', ({data: {channelId, from}, callback}) => {
-    // console.log('receive.connect.request', channelId, from);
-
     const id = new hexToUint8Array(from);
     const sub = new dht.SubChannel(dhtClient, id, channelId);
     const mediator = new wrtc.Mediator(sub);
     const client = new wrtc.Client(mediator);
 
+    mediator.once('error', () => sub.close());
     client.once('open', () => sub.close());
 
     client.on('datachannel', ({channel}) => {

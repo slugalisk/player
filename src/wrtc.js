@@ -10,35 +10,51 @@ class Mediator extends EventEmitter {
     super();
 
     this.conn = conn;
-    this.conn.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'offer') {
+    this.conn.onmessage = this.handleMessage.bind(this);
+  }
+
+  handleMessage(event) {
+    const data = JSON.parse(event.data);
+
+    switch (data.type) {
+      case 'offer':
+      case 'answer':
         this.emit('remotedescription', new RTCSessionDescription(data));
-      } else if (data.type === 'answer') {
-        this.emit('remotedescription', new RTCSessionDescription(data));
-      } else if (data.type === 'icecandidate') {
+        break;
+      case 'icecandidate':
         if (data.sdp && data.sdp.candidate) {
           this.emit('icecandidate', new RTCIceCandidate(data.sdp));
         }
-      }
-    };
+        break;
+      default:
+        this.emit('error', new Error('unsupported mediator event type'));
+    }
   }
 
   sendOffer(event) {
-    this.conn.send(JSON.stringify(event));
+    this.send(event);
   }
 
   sendAnswer(event) {
-    this.conn.send(JSON.stringify(event));
+    this.send(event);
   }
 
   sendIceCandidate(event) {
     if (event.candidate) {
-      this.conn.send(JSON.stringify({
+      this.send({
         type: 'icecandidate',
         sdp: event.candidate,
-      }));
+      });
     }
+  }
+
+  send(event) {
+    if (this.conn.readyState !== 1) {
+      this.emit('error', new Error('connection in invalid state'));
+      return;
+    }
+
+    this.conn.send(JSON.stringify(event));
   }
 }
 
@@ -50,23 +66,24 @@ class Client extends EventEmitter {
     this.initialized = false;
     this.waitingChannels = 0;
 
-    this.pc = new RTCPeerConnection({
+    this.peerConn = new RTCPeerConnection({
       iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
     });
 
-    this.pc.onicecandidate = candidate => this.mediator.sendIceCandidate(candidate);
-    this.pc.ondatachannel = this.handleDataChannel.bind(this);
+    this.peerConn.addEventListener('icecandidate', candidate => this.mediator.sendIceCandidate(candidate));
+    this.peerConn.addEventListener('datachannel', this.handleDataChannel.bind(this));
 
+    mediator.once('error', () => this.peerConn.close());
     mediator.on('icecandidate', candidate => this.addIceCandidate(candidate));
 
     this._ready = new Promise((resolve, reject) => {
       mediator.on('remotedescription', description => {
-        this.pc.setRemoteDescription(description)
+        this.peerConn.setRemoteDescription(description)
           .then(() => {
             resolve();
             this.createAnswer();
           })
-          .catch(err => console.error(err));
+          .catch(reject);
       });
     });
   }
@@ -77,16 +94,16 @@ class Client extends EventEmitter {
     }
     this.initialized = true;
 
-    this.pc.createAnswer()
+    this.peerConn.createAnswer()
       .then((description) => {
-        this.pc.setLocalDescription(description);
+        this.peerConn.setLocalDescription(description);
         this.mediator.sendAnswer(description);
       })
-      .catch(err => console.error(err));
+      .catch(error => console.error(error));
   }
 
   addIceCandidate(candidate) {
-    this._ready.then(() => this.pc.addIceCandidate(candidate));
+    this._ready.then(() => this.peerConn.addIceCandidate(candidate));
   }
 
   handleDataChannel(event) {
@@ -98,12 +115,13 @@ class Client extends EventEmitter {
 
   createDataChannel(label, options = {}) {
     options = {
-      binaryType: 'arraybuffer',
       ordered: true,
+      maxRetransmits: 10,
       ...options,
     };
 
-    const channel = this.pc.createDataChannel(label, options);
+    const channel = this.peerConn.createDataChannel(label, options);
+    channel.binaryType = 'arraybuffer';
 
     this.waitingChannels ++;
     channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
@@ -118,11 +136,11 @@ class Client extends EventEmitter {
   }
 
   init() {
-    this.pc.createOffer()
+    this.peerConn.createOffer()
       .then(offer => {
         this.initialized = true;
         // console.log('initial offer', offer);
-        this.pc.setLocalDescription(offer);
+        this.peerConn.setLocalDescription(offer);
         this.mediator.sendOffer(offer);
       });
   }

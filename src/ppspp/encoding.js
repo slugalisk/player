@@ -660,8 +660,8 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
       this.messages = Messages.from(messages);
     }
 
-    read(buffer) {
-      buffer = Buffer.from(buffer);
+    read(data) {
+      const buffer = Buffer.from(data);
 
       let length = 0;
 

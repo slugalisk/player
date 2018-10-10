@@ -36,10 +36,12 @@ const dhtClient = new dht.Client(generateId(serverIp));
 const ppsppClient = new ppspp.Client();
 
 const wss = new ws.Server({server});
-wss.on('connection', function(ws, req) {
-  const mediator = new wrtc.Mediator(ws);
+wss.on('connection', function(conn, req) {
+  const mediator = new wrtc.Mediator(conn);
   const client = new wrtc.Client(mediator);
   const id = generateId(req.connection.remoteAddress);
+
+  mediator.on('error', () => conn.close());
 
   client.on('datachannel', ({channel}) => {
     if (channel.label === 'dht') {
@@ -49,7 +51,7 @@ wss.on('connection', function(ws, req) {
     }
   });
 
-  ws.send(JSON.stringify({
+  conn.send(JSON.stringify({
     type: 'bootstrap',
     bootstrapId: arrayBufferToHex(dhtClient.id),
     id: arrayBufferToHex(id),
