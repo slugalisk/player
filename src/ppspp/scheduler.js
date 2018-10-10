@@ -293,13 +293,15 @@ class SchedulerPeerState {
     // this.rttMean = new EMA(0.125);
     // this.rttVar = new EMA(0.25);
 
-    // this.chunkIntervalMean = new EMA(0.25);
-
     this.rttMean = new EMA(0.05);
     this.rttVar = new EMA(0.05);
 
-    this.chunkIntervalMean = new EMA(0.25);
+    // this.chunkIntervalMean = new EMA(0.25);
+    this.chunkRate = new RateMeter(30000, 50);
+    this.wasteRate = new RateMeter(30000, 50);
     this.lastChunkTime = null;
+
+    this.requestTimes = new BinRingBuffer();
 
     this.requestedChunks = new SchedulerChunkRequestMap();
     this.sentRequests = new SchedulerChunkRequestMap();
@@ -398,38 +400,13 @@ class Scheduler {
       );
       const lastAvailableBin = Math.min(availableChunks.max(), startBin + this.liveDiscardWindow * 2);
 
-      let totalBothHave = 0;
-      let totalTheyHave = 0;
-      let totalWeHave = 0;
-      let totalWeWant = 0;
-      let totalWeRequested = 0;
-      for (let i = availableChunks.min(); i <= availableChunks.max(); i += 2) {
-        const address = new Address(i);
-        const theyHave = availableChunks.get(address);
-        const weHave = this.loadedChunks.get(address);
-        const weRequested = this.requestedChunks.get(address);
+      const planFor = Math.min(1000, peerState.ledbat.rttMean.value() * 4);
 
-        if (theyHave && weHave) {
-          totalBothHave ++;
-        }
-        if (theyHave && !weHave) {
-          totalWeWant ++;
-        }
-        if (theyHave) {
-          totalTheyHave ++;
-        }
-        if (weHave) {
-          totalWeHave ++;
-        }
-        if (weRequested) {
-          totalWeRequested ++;
-        }
-      }
+      // const dip = peerState.chunkIntervalMean.value() || 0;
+      // const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
 
-      const planFor = Math.min(1000, peerState.rttMean.value() * 4);
-
-      const dip = peerState.chunkIntervalMean.value() || 0;
-      const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
+      const dip = peerState.chunkRate.value() || 0;
+      const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor * dip);
 
       const cwnd = firstPlanPick - peerState.sentRequests.length;
 
@@ -439,13 +416,10 @@ class Scheduler {
         sentRequests: peerState.sentRequests.length,
         swift_rtt: peerState.rttMean.value(),
         swift_rttvar: peerState.rttVar.value(),
-        swift_chunkIntervalMean: peerState.chunkIntervalMean.value(),
+        // swift_chunkIntervalMean: peerState.chunkIntervalMean.value(),
+        chunkRate: peerState.chunkRate.value(),
+        wasteRate: peerState.wasteRate.value(),
         swift_cwnd: cwnd,
-        totals_totalBothHave: totalBothHave,
-        totals_totalTheyHave: totalTheyHave,
-        totals_totalWeWant: totalWeWant,
-        totals_totalWeHave: totalWeHave,
-        totals_totalWeRequested: totalWeRequested,
         ledbat_cwnd: peerState.ledbat.cwnd,
         ledbat_cto: peerState.ledbat.cto,
         ledbat_currentDelay: peerState.ledbat.currentDelay.getMin(),
@@ -477,6 +451,7 @@ class Scheduler {
       sendDelay: this.sendDelay.value(),
       picker_firstLoadedChunk: this.loadedChunks.min(),
       picker_firstRequestedChunk: this.requestedChunks.min(),
+      chunkRate: this.chunkRate.value(),
     }, true, 2));
     this.totalSends = 0;
     this.totalRequests = 0;
@@ -506,6 +481,14 @@ class Scheduler {
     const planFor = ledbat.rttMean.value();
     const timeoutThreshold = now - ledbat.cto * 2;
 
+    // const dip = peerState.chunkIntervalMean.value() || 0;
+    // const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
+    // const cwnd = firstPlanPick - sentRequests.length;
+
+    const dip = peerState.chunkRate.value() || 0;
+    const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor * dip);
+    const cwnd = firstPlanPick - sentRequests.length;
+
     const cancelledRequests = [];
     while (sentRequests.peek() !== undefined
       && sentRequests.peek().createdAt > timeoutThreshold) {
@@ -518,10 +501,6 @@ class Scheduler {
       ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
     }
 
-    const dip = peerState.chunkIntervalMean.value() || 0;
-    const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
-    const cwnd = firstPlanPick - sentRequests.length;
-
     const startBin = Math.max(
       this.loadedChunks.values.offset * 2 + 2,
       this.requestedChunks.values.offset * 2 + 2,
@@ -533,7 +512,7 @@ class Scheduler {
       availableChunks.max(),
     );
     const requestAddresses = [];
-    for (let i = startBin; i < endBin; i += 2) {
+    for (let i = startBin; i < endBin && requestAddresses.length < cwnd; i += 2) {
       const address = new Address(i);
       if (!this.loadedChunks.get(address)
         && !this.requestedChunks.get(address)
@@ -542,10 +521,6 @@ class Scheduler {
         requestAddresses.push(address);
         sentRequests.insert(address);
         this.requestedChunks.set(address);
-
-        if (requestAddresses.length >= cwnd) {
-          break;
-        }
       }
     }
     if (this.lastCompletedBin === -Infinity && requestAddresses.length !== 0) {
@@ -564,6 +539,12 @@ class Scheduler {
     if (requestAddresses.length !== 0) {
       this.totalRequests += requestAddresses.length;
       peerState.peer.sendRequest(...requestAddresses);
+
+      requestAddresses.forEach(address => {
+        if (peerState.requestTimes.get(address) === undefined) {
+          peerState.requestTimes.set(address, now);
+        }
+      });
     }
 
     while (ledbat.flightSize < ledbat.cwnd && peerState.requestQueue.length) {
@@ -619,29 +600,45 @@ class Scheduler {
 
   setLiveDiscardWindow(peer, liveDiscardWindow) {
     this.getPeerState(peer).availableChunks.setCapacity(liveDiscardWindow);
+    this.getPeerState(peer).requestTimes.setCapacity(liveDiscardWindow);
   }
 
   markChunkReceived(peer, address, delaySample) {
+    const now = Date.now();
+
     this.totalReceived ++;
 
     const peerState = this.getPeerState(peer);
     if (peerState === undefined) {
       return;
     }
+
+    if (this.loadedChunks.get(address)) {
+      peerState.wasteRate.update(1);
+    }
+
     const request = peerState.sentRequests.get(address);
     if (request === undefined) {
       return;
     }
 
-    const now = Date.now();
-    if (peerState.lastChunkTime !== null) {
-      const chunkInterval = now - peerState.lastChunkTime;
-      peerState.chunkIntervalMean.update(chunkInterval);
+    // if (peerState.lastChunkTime !== null) {
+    //   const chunkInterval = now - peerState.lastChunkTime;
+    //   peerState.chunkIntervalMean.update(chunkInterval);
+    // }
+    // peerState.lastChunkTime = now;
+    if (!this.loadedChunks.get(address)) {
+      peerState.chunkRate.update(1);
     }
-    peerState.lastChunkTime = now;
 
-    const rtt = now - request.createdAt;
-    peerState.ledbat.addRttSample(rtt);
+    const requestTime = peerState.requestTimes.get(address);
+    if (requestTime !== undefined) {
+      peerState.ledbat.addRttSample(now - request.createdAt);
+    }
+
+    // this may not be the initial request if we re-requested this chunk...
+    // const rtt = now - request.createdAt;
+    // peerState.ledbat.addRttSample(rtt);
     // peerState.rttMean.update(rtt);
     // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
 
