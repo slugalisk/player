@@ -296,9 +296,9 @@ class SchedulerPeerState {
     this.rttMean = new EMA(0.05);
     this.rttVar = new EMA(0.05);
 
-    // this.chunkIntervalMean = new EMA(0.25);
-    this.chunkRate = new RateMeter(30000, 50);
-    this.wasteRate = new RateMeter(30000, 50);
+    this.chunkIntervalMean = new EMA(0.25);
+    this.chunkRate = new RateMeter(15000);
+    this.wasteRate = new RateMeter(15000);
     this.lastChunkTime = null;
 
     this.requestTimes = new BinRingBuffer();
@@ -402,12 +402,8 @@ class Scheduler {
 
       const planFor = Math.min(1000, peerState.ledbat.rttMean.value() * 4);
 
-      // const dip = peerState.chunkIntervalMean.value() || 0;
-      // const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
-
-      const dip = peerState.chunkRate.value() || 0;
-      const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor * dip);
-
+      const dip = peerState.chunkIntervalMean.value() || 0;
+      const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
       const cwnd = firstPlanPick - peerState.sentRequests.length;
 
       console.log(JSON.stringify({
@@ -416,7 +412,7 @@ class Scheduler {
         sentRequests: peerState.sentRequests.length,
         swift_rtt: peerState.rttMean.value(),
         swift_rttvar: peerState.rttVar.value(),
-        // swift_chunkIntervalMean: peerState.chunkIntervalMean.value(),
+        swift_chunkIntervalMean: peerState.chunkIntervalMean.value(),
         chunkRate: peerState.chunkRate.value(),
         wasteRate: peerState.wasteRate.value(),
         swift_cwnd: cwnd,
@@ -481,17 +477,13 @@ class Scheduler {
     const planFor = ledbat.rttMean.value();
     const timeoutThreshold = now - ledbat.cto * 2;
 
-    // const dip = peerState.chunkIntervalMean.value() || 0;
-    // const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
-    // const cwnd = firstPlanPick - sentRequests.length;
-
-    const dip = peerState.chunkRate.value() || 0;
-    const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor * dip);
+    const dip = peerState.chunkIntervalMean.value() || 0;
+    const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
     const cwnd = firstPlanPick - sentRequests.length;
 
     const cancelledRequests = [];
     while (sentRequests.peek() !== undefined
-      && sentRequests.peek().createdAt > timeoutThreshold) {
+      && sentRequests.peek().createdAt < timeoutThreshold) {
       cancelledRequests.push(sentRequests.pop());
     }
 
@@ -622,23 +614,20 @@ class Scheduler {
       return;
     }
 
-    // if (peerState.lastChunkTime !== null) {
-    //   const chunkInterval = now - peerState.lastChunkTime;
-    //   peerState.chunkIntervalMean.update(chunkInterval);
-    // }
-    // peerState.lastChunkTime = now;
+    if (peerState.lastChunkTime !== null) {
+      const chunkInterval = now - peerState.lastChunkTime;
+      peerState.chunkIntervalMean.update(chunkInterval);
+    }
+    peerState.lastChunkTime = now;
     if (!this.loadedChunks.get(address)) {
       peerState.chunkRate.update(1);
     }
 
     const requestTime = peerState.requestTimes.get(address);
     if (requestTime !== undefined) {
-      peerState.ledbat.addRttSample(now - request.createdAt);
+      peerState.ledbat.addRttSample(now - requestTime);
     }
 
-    // this may not be the initial request if we re-requested this chunk...
-    // const rtt = now - request.createdAt;
-    // peerState.ledbat.addRttSample(rtt);
     // peerState.rttMean.update(rtt);
     // peerState.rttVar.update(Math.abs(rtt - peerState.rttMean.value()));
 
