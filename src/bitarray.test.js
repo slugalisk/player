@@ -128,16 +128,16 @@ it ('min', () => {
   const b = new BitArray(64);
 
   b.set(1);
-  // expect(b.min()).toEqual(1);
+  expect(b.min()).toEqual(1);
 
   b.set(100);
-  // expect(b.min()).toEqual(100);
+  expect(b.min()).toEqual(100);
 
   b.set(64);
   expect(b.min()).toEqual(64);
 
   b.set(63);
-  // expect(b.min()).toEqual(63);
+  expect(b.min()).toEqual(63);
 });
 
 it ('max', () => {

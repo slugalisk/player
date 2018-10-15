@@ -8,7 +8,7 @@ const protocolOptionToKey = {
   [ProtocolOptions.LiveSignatureAlgorithm]: 'x.sa',
   [ProtocolOptions.ChunkAddressingMethod]: 'x.am',
   [ProtocolOptions.ChunkSize]: 'x.cs',
-}
+};
 
 // TODO: dn with stream name
 // TODO: as to m3u8 url?

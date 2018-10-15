@@ -449,14 +449,14 @@ class Scheduler {
       picker_firstRequestedChunk: this.requestedChunks.min(),
       chunkRate: this.chunkRate.value(),
     }, true, 2));
-    this.totalSends = 0;
-    this.totalRequests = 0;
-    this.totalRequestsReceived = 0;
-    this.totalReceived = 0;
-    // this.ackUnknownSend = 0;
-    this.totalAdded = 0;
-    this.totalCancelled = 0;
-    this.totalDroppedRequests = 0;
+    // this.totalSends = 0;
+    // this.totalRequests = 0;
+    // this.totalRequestsReceived = 0;
+    // this.totalReceived = 0;
+    // // this.ackUnknownSend = 0;
+    // this.totalAdded = 0;
+    // this.totalCancelled = 0;
+    // this.totalDroppedRequests = 0;
   }
 
   update(peerState, update) {
@@ -490,7 +490,9 @@ class Scheduler {
     if (cancelledRequests.length > 0) {
       this.totalCancelled += cancelledRequests.length;
       cancelledRequests.forEach(({address}) => sentRequests.remove(address));
-      ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
+
+      // TODO: this is for ack timeout
+      // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
     }
 
     const startBin = Math.max(

@@ -1,0 +1,69 @@
+.diagnostic_menu__container {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: block;
+  z-index: 10;
+}
+
+.diagnostic_menu__container>.diagnostic_menu__toggle_button {
+  position: absolute;
+  right: 0;
+}
+
+.diagnostic_menu__container--expanded {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.diagnostic_menu__toggle_button {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  outline: none;
+}
+
+.diagnostic_menu__toggle_button::after {
+  font-family: monospace;
+  content: '[+]';
+  color: white;
+  display: block;
+}
+
+.diagnostic_menu__toggle_button--expanded::after {
+  content: '[-]';
+  color: black;
+}
+
+.peer_state__container {
+  width: 500px;
+  padding: 10px;
+}
+
+.peer_state__header {
+  display: flex;
+}
+
+.peer_state__header .diagnostic_menu__toggle_button {
+  display: flex;
+  flex: 0 0 30px;
+  margin: 0;
+  padding: 0;
+  line-height: 10px;
+}
+
+.peer_state__header .diagnostic_menu__toggle_button::after {
+  color: black;
+}
+
+.peer_state__title {
+  display: flex;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+}
+
+.swarm_state__container {
+  width: 500px;
+  padding: 10px;
+}

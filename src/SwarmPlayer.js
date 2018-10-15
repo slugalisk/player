@@ -1,6 +1,8 @@
 import React, {Component} from 'react';
 import muxjs from 'mux.js';
 import {ChunkedFragmentedReadStream} from './chunkedStream';
+import DiagnosticMenu from './DiagnosticMenu';
+
 import './SwarmPlayer.css';
 
 const {Buffer} = require('buffer');
@@ -66,11 +68,14 @@ class SwarmPlayer extends Component {
 
   render() {
     return (
-      <video
-        controls
-        className="swarm-player-video"
-        ref={this.video}
-      />
+      <React.Fragment>
+        <DiagnosticMenu swarm={this.props.swarm} />
+        <video
+          controls
+          className="swarm-player-video"
+          ref={this.video}
+        />
+      </React.Fragment>
     );
   }
 }
