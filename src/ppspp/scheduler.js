@@ -19,7 +19,7 @@ class AvailabilityMap {
     this.values.setRange(address.start / 2, address.end / 2 + 1, value);
   }
 
-  get({start, end}) {
+  get({start, end = start}) {
     for (let i = start; i <= end; i += 2) {
       if (!this.values.get(i / 2)) {
         return false;
@@ -311,6 +311,9 @@ class SchedulerPeerState {
     this.invalidChunks = 0;
 
     this.requestQueue = [];
+
+    this.sentChunks = new AvailabilityMap();
+    this.receivedChunks = new AvailabilityMap();
   }
 }
 
@@ -553,6 +556,8 @@ class Scheduler {
         }
       }
 
+      peerState.sentChunks.set(requestedAddress);
+
       // TODO: volunteer bin we have and they don't?
     }
 
@@ -595,6 +600,9 @@ class Scheduler {
   setLiveDiscardWindow(peer, liveDiscardWindow) {
     this.getPeerState(peer).availableChunks.setCapacity(liveDiscardWindow);
     this.getPeerState(peer).requestTimes.setCapacity(liveDiscardWindow);
+
+    this.getPeerState(peer).sentChunks.setCapacity(liveDiscardWindow);
+    this.getPeerState(peer).receivedChunks.setCapacity(liveDiscardWindow);
   }
 
   markChunkReceived(peer, address, delaySample) {
@@ -642,6 +650,7 @@ class Scheduler {
   markChunkVerified(peer, address) {
     // this.chunkStates.get(address).verified = true;
     this.getPeerState(peer).validChunks ++;
+    this.getPeerState(peer).receivedChunks.set(address);
 
     // this.chunkStates.advanceLastBin(address.end);
 

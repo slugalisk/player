@@ -1,5 +1,6 @@
 import React, {Component} from 'react';
 import classNames from 'classnames';
+import {scaleLinear} from 'd3-scale';
 
 import './index.css';
 
@@ -61,7 +62,7 @@ class SwarmState extends Component {
         value: scheduler.ackUnknownSend,
       },
       {
-        key: 'minIncompleteBin',
+        key: 'lastCompletedBin',
         value: scheduler.lastCompletedBin,
       },
       {
@@ -84,7 +85,7 @@ class SwarmState extends Component {
 
     const rows = values.map(({key, value}) => (
       <tr key={key}>
-        <td>{key}</td>
+        <td className="diagnostic_table__key_cell">{key}</td>
         <td>{value}</td>
       </tr>
     ));
@@ -125,6 +126,14 @@ class PeerStateTable extends Component {
         value: peerState.ledbat.currentDelay.getMin(),
       },
       {
+        key: 'ledbat.rttMean',
+        value: peerState.ledbat.rttMean.value(),
+      },
+      {
+        key: 'ledbat.rttVar',
+        value: peerState.ledbat.rttVar.value(),
+      },
+      {
         key: 'ledbat.cwnd',
         value: peerState.ledbat.cwnd,
       },
@@ -152,15 +161,123 @@ class PeerStateTable extends Component {
 
     const rows = values.map(({key, value}) => (
       <tr key={key}>
-        <td>{key}</td>
+        <td className="diagnostic_table__key_cell">{key}</td>
         <td>{value}</td>
       </tr>
     ));
 
+    const {
+      startBin,
+      endBin,
+    } = this.props;
+
+    rows.push(
+      <tr key="availableChunks">
+        <td colSpan="2">
+          Available
+          <AvailabilityMapChart
+            value={this.props.value.availableChunks}
+            startBin={startBin}
+            endBin={endBin}
+          />
+        </td>
+      </tr>
+    );
+
+    rows.push(
+      <tr key="sentChunks">
+        <td colSpan="2">
+          Sent
+          <AvailabilityMapChart
+            value={this.props.value.sentChunks}
+            startBin={startBin}
+            endBin={endBin}
+          />
+        </td>
+      </tr>
+    );
+
+    rows.push(
+      <tr key="receivedChunks">
+        <td colSpan="2">
+          Received
+          <AvailabilityMapChart
+            value={this.props.value.receivedChunks}
+            startBin={startBin}
+            endBin={endBin}
+          />
+        </td>
+      </tr>
+    );
+
     return (
       <table>
-        {rows}
+        <tbody>
+          {rows}
+        </tbody>
       </table>
+    );
+  }
+}
+
+class AvailabilityMapChart extends Component {
+  constructor(props) {
+    super(props);
+
+    this.canvas = React.createRef();
+  }
+
+  componentDidUpdate() {
+    if (!this.canvas.current) {
+      return;
+    }
+
+    const {value} = this.props;
+    const min = isNaN(this.props.startBin)
+      ? value.min()
+      : this.props.startBin;
+    const max = isNaN(this.props.endBin)
+      ? value.max()
+      : this.props.endBin;
+
+    if (!isFinite(min) || !isFinite(max) || isNaN(min) || isNaN(max)) {
+      return;
+    }
+
+    const ctx = this.canvas.current.getContext('2d');
+    const width = 500;
+    const height = 20;
+
+    const scale = scaleLinear()
+      .domain([min, max])
+      .range([0, width]);
+
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = '#ccc';
+
+    let lastStart = -1;
+    for (let i = min; i <= max; i += 2) {
+      if (!value.values.get((i + 2) / 2)) {
+        if (lastStart !== -1) {
+          ctx.fillRect(scale(lastStart), 0, scale(i) - scale(lastStart), 20);
+
+          lastStart = -1;
+        }
+      } else if (lastStart === -1) {
+        lastStart = i;
+      }
+    }
+  }
+
+  render() {
+    return (
+      <canvas
+        height="20"
+        width="500"
+        ref={this.canvas}
+      />
     );
   }
 }
@@ -181,7 +298,13 @@ class PeerState extends Component {
   render() {
     let table;
     if (this.state.expanded) {
-      table = <PeerStateTable value={this.props.value} />;
+      table = (
+        <PeerStateTable
+          value={this.props.value}
+          startBin={this.props.startBin}
+          endBin={this.props.endBin}
+        />
+      );
     }
 
     return (
@@ -232,13 +355,31 @@ class DiagnosticMenu extends Component {
       'diagnostic_menu__container--expanded': this.state.expanded,
     });
 
+    const {
+      lastCompletedBin,
+      liveDiscardWindow,
+    } = this.props.swarm.scheduler;
+    const startBin = lastCompletedBin - liveDiscardWindow;
+    const endBin = lastCompletedBin + liveDiscardWindow;
+
     let swarmState;
     let peerStates;
     if (this.state.expanded) {
-      swarmState = <SwarmState value={this.props.swarm} />
+      swarmState = (
+        <SwarmState
+          value={this.props.swarm}
+          startBin={startBin}
+          endBin={endBin}
+        />
+      );
 
       peerStates = Object.entries(this.props.swarm.scheduler.peerStates).map(([key, peerState]) => (
-        <PeerState key={key} value={peerState} />
+        <PeerState
+          key={key}
+          value={peerState}
+          startBin={startBin}
+          endBin={endBin}
+        />
       ));
     }
 
