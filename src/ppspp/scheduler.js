@@ -77,7 +77,7 @@ class RateMeter {
     this.values.fill(0);
   }
 
-  update(value) {
+  adjustSampleWindow() {
     const sampleWindow = Math.floor(Date.now() / this.sampleWindowMs);
 
     for (let i = this.lastSampleWindow + 1; i <= sampleWindow; i ++) {
@@ -86,12 +86,16 @@ class RateMeter {
       this.values[index] = 0;
     }
     this.lastSampleWindow = sampleWindow;
+  }
 
+  update(value) {
+    this.adjustSampleWindow();
     this.sum += value;
-    this.values[sampleWindow % this.values.length] += value;
+    this.values[this.lastSampleWindow % this.values.length] += value;
   }
 
   value() {
+    this.adjustSampleWindow();
     const accumulatedMs = Math.min(
       (this.lastSampleWindow - this.firstSampleWindow) * this.sampleWindowMs,
       this.windowMs,
@@ -354,7 +358,6 @@ class Scheduler {
 
     this.chunkRate = new ChunkRateMeter();
 
-
     this.requestQueue = new RequestQueue(uploadRateLimit / 1000);
 
     // this.update = this.update.bind(this);
@@ -375,7 +378,7 @@ class Scheduler {
     this.ackUnknownSend = 0;
     this.totalDroppedRequests = 0;
     this.sendDelay = new EMA(0.05);
-    setInterval(this.debug.bind(this), 1000);
+    // setInterval(this.debug.bind(this), 1000);
 
     this.nextSendTime = 0;
     this.nextSendTimeout = 0;
@@ -477,7 +480,9 @@ class Scheduler {
     ledbat.digestDelaySamples();
 
     const now = Date.now();
-    const planFor = ledbat.rttMean.value();
+    // const planFor = ledbat.rttMean.value();
+    // const planFor = ledbat.rttMean.value() * 2 + ledbat.rttVar.value() * 4;
+    const planFor = Math.max(1000, ledbat.rttMean.value() * 4);
     const timeoutThreshold = now - ledbat.cto * 2;
 
     const dip = peerState.chunkIntervalMean.value() || 0;
@@ -515,9 +520,11 @@ class Scheduler {
         && !this.requestedChunks.get(address)
         && availableChunks.get(address)) {
 
-        requestAddresses.push(address);
-        sentRequests.insert(address);
-        this.requestedChunks.set(address);
+        if (Math.random() < 0.05) {
+          requestAddresses.push(address);
+          sentRequests.insert(address);
+          this.requestedChunks.set(address);
+        }
       }
     }
     if (this.lastCompletedBin === -Infinity && requestAddresses.length !== 0) {
@@ -595,6 +602,28 @@ class Scheduler {
 
   getPeerState({localId}) {
     return this.peerStates[localId];
+  }
+
+  getRecentChunks() {
+    // TODO: how to pick this... maybe remote discard window size?
+    const startBin = this.loadedChunks.max() - 512;
+
+    // bail if no chunks have been loaded yet
+    if (!isFinite(startBin)) {
+      return [];
+    }
+
+    const bins = [];
+
+    const endBin = this.loadedChunks.max();
+    for (let i = startBin; i <= endBin; i += 2) {
+      const address = new Address(i);
+      if (this.loadedChunks.get(address)) {
+        bins.push(address);
+      }
+    }
+
+    return bins;
   }
 
   setLiveDiscardWindow(peer, liveDiscardWindow) {

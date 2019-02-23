@@ -159,18 +159,9 @@ class Peer {
   }
 
   init() {
-    const {encoding} = this.swarm;
-    const messages = [];
+    this.sendHandshake();
+    this.flush();
 
-    messages.push(new encoding.HandshakeMessage(
-      this.localId,
-      [
-        ...this.swarm.protocolOptions,
-        new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
-      ],
-    ));
-
-    this.channel.send(new encoding.Datagram(this.remoteId, messages));
     this.state = PeerState.AWAITING_HANDSHAKE;
   }
 
@@ -207,20 +198,9 @@ class Peer {
     this.remoteId = handshake.channelId;
 
     if (this.state === PeerState.CONNECTING) {
-      const {encoding} = this.swarm;
-
-      this.channel.send(new encoding.Datagram(
-        this.remoteId,
-        [
-          new encoding.HandshakeMessage(
-            this.localId,
-            [
-              ...this.swarm.protocolOptions,
-              new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
-            ],
-          ),
-        ],
-      ));
+      this.sendHandshake();
+      this.swarm.scheduler.getRecentChunks().forEach(address => this.sendHave(address));
+      this.flush();
     }
 
     this.state = PeerState.READY;
@@ -288,6 +268,17 @@ class Peer {
 
   isReady() {
     return this.state === PeerState.READY;
+  }
+
+  sendHandshake() {
+    const {encoding} = this.swarm;
+    this.sendBuffer.push(new encoding.HandshakeMessage(
+      this.localId,
+      [
+        ...this.swarm.protocolOptions,
+        new encoding.SupportedMessagesProtocolOption(Object.keys(this.handlers)),
+      ],
+    ));
   }
 
   sendHave(address) {

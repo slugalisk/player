@@ -32,14 +32,14 @@ class ChunkedWriteStream extends EventEmitter {
 
 class ChunkedWriteStreamInjector extends EventEmitter {
   start() {
-    const data = Buffer.alloc((3500000 / 8) * (250 / 1000));
+    const data = Buffer.alloc(3500000 / 8);
     data.fill(255);
 
     Injector.create().then(injector => {
       this.injector = injector;
 
       const writer = new ChunkedWriteStream(injector);
-      this.intervalId = setInterval(() => writer.write(data), 250);
+      this.intervalId = setInterval(() => writer.write(data), 1000);
       this.emit('publish', injector);
     });
   }

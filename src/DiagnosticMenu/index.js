@@ -66,10 +66,6 @@ class SwarmState extends Component {
         value: scheduler.lastCompletedBin,
       },
       {
-        key: 'sendDelay',
-        value: scheduler.sendDelay.value(),
-      },
-      {
         key: 'picker.firstLoadedChunk',
         value: scheduler.loadedChunks.min(),
       },
@@ -259,7 +255,7 @@ class AvailabilityMapChart extends Component {
 
     let lastStart = -1;
     for (let i = min; i <= max; i += 2) {
-      if (!value.values.get((i + 2) / 2)) {
+      if (!value.values.get((i + 2) / 2) || i === max) {
         if (lastStart !== -1) {
           ctx.fillRect(scale(lastStart), 0, scale(i) - scale(lastStart), 20);
 
@@ -314,7 +310,9 @@ class PeerState extends Component {
             onClick={this.handleButtonClick}
             expanded={this.state.expanded}
           />
-          <h4 className="peer_state__title">{this.props.value.peer.localId}</h4>
+          <h4 className="peer_state__title">
+            {this.props.value.peer.localId} : {this.props.value.peer.remoteId}
+          </h4>
         </div>
         {table}
       </div>

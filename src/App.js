@@ -1,55 +1,67 @@
-import React, {Component} from 'react';
+import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
 import SwarmPlayer from './SwarmPlayer';
+import {ConnManager, ClientManager} from './client';
 // import {ChunkedReadStream} from './chunkedStream';
+
 import './App.css';
 
-class App extends Component {
-  constructor(props) {
-    super(props);
+const BOOTSTRAP_ADDRESS = process.env.NODE_ENV === 'development'
+  ? window.location.hostname + ':8080'
+  : window.location.host;
 
-    this.state = {swarmUri: props.swarmUri};
+const App = () => {
+  const [ppsppClient, setPpsppClient] = useState(null);
+  const [swarmUri, setSwarmUri] = useState('');
+  const [swarm, setSwarm] = useState(null);
+
+  useEffect(() => {
+    const connManager = new ConnManager(BOOTSTRAP_ADDRESS);
+    const clientManager = new ClientManager(connManager);
+
+    clientManager.createClient().then(({ppsppClient, swarmUri}) => {
+      setPpsppClient(ppsppClient);
+      setSwarmUri(swarmUri);
+    });
+  }, []);
+
+  if (swarm) {
+    return <SwarmPlayer swarm={swarm} />;
   }
 
-  onJoinSubmit = e => {
+  const onJoinSubmit = e => {
     e.preventDefault();
 
-    console.log(this.state.swarmUri);
-    const uri = URI.parse(this.state.swarmUri);
+    console.log(swarmUri);
+    const uri = URI.parse(swarmUri);
     console.log('joining', uri);
 
-    const swarm = this.props.ppsppClient.joinSwarm(uri);
+    const swarm = ppsppClient.joinSwarm(uri);
     // const stream = new ChunkedReadStream(swarm);
     // stream.on('data', d => console.log(`received ${d.length} bytes`));
-    this.setState({swarm});
-  }
+    setSwarm(swarm);
+  };
 
-  onInputChange = e => {
-    this.setState({swarmUri: e.target.value});
-  }
+  const onInputChange = e => {
+    setSwarmUri(e.target.value);
+  };
 
-  render() {
-    if (this.state.swarm) {
-      return <SwarmPlayer swarm={this.state.swarm} />;
-    }
-
-    return (
-      <React.Fragment>
-        <div className="idle">
-          <div className="scanner"></div>
-          <div className="noise"></div>
-        </div>
-        <form className="join-form" onSubmit={this.onJoinSubmit}>
-          <input
-            onChange={this.onInputChange}
-            placeholder="Enter Swarm URI"
-            value={this.state.swarmUri}
-          />
-          <button>Join</button>
-        </form>
-      </React.Fragment>
-    );
-  }
-}
+  return (
+    <React.Fragment>
+      <div className="idle">
+        <div className="scanner"></div>
+        <div className="noise"></div>
+      </div>
+      <form className="join-form" onSubmit={onJoinSubmit}>
+        <input
+          onChange={onInputChange}
+          placeholder="Enter Swarm URI"
+          defaultValue={swarmUri}
+        />
+        <button>Join</button>
+      </form>
+    </React.Fragment>
+  );
+};
 
 export default App;

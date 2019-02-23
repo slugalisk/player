@@ -95,7 +95,7 @@ class Client extends EventEmitter {
   }
 
   handleMessage(channel, event) {
-    // console.log('handleMessage', event.data);
+    console.log('handleMessage', event.data);
 
     const req = JSON.parse(event.data);
     const {type, id} = req;
@@ -132,6 +132,7 @@ class Client extends EventEmitter {
         // console.warn('<<< callback for %s expired', req.re);
       }
     } else {
+      // console.log(`emit receive.${type}`, req);
       this.emit(`receive.${type}`, {data: req, callback: resCallback});
     }
   }
@@ -245,6 +246,7 @@ class Channel {
 
 class SubChannel {
   constructor(client, peerId, id=arrayBufferToHex(randomBytes(16))) {
+    console.log('subchannel created', id);
     this.client = client;
     this.peerId = peerId;
     this.id = id;
@@ -256,7 +258,7 @@ class SubChannel {
   }
 
   handleMessage({data: {channelId, data}}) {
-    // console.log('receive.subchannel.message', channelId, this.id, data)
+    // console.log('receive.subchannel.message', channelId, this.id, data);
 
     if (channelId === this.id) {
       this.onmessage({data});

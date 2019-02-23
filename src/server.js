@@ -82,8 +82,8 @@ injector.on('publish', ({swarm}) => {
   ppsppClient.publishSwarm(swarm);
 });
 
-injector.on('unpublish', injector => {
-  ppsppClient.unpublishSwarm(injector.swarm);
+injector.on('unpublish', ({swarm}) => {
+  ppsppClient.unpublishSwarm(swarm);
 });
 
 const shutdown = (signal = 'SIGTERM') => {
