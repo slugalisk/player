@@ -78,7 +78,7 @@ export class ClientManager {
   }
 
   handleReceiveConnectRequest({data: {channelId, from}, callback}) {
-    console.log('handleReceiveConnectRequest', {channelId, from, callback});
+    // console.log('handleReceiveConnectRequest', {channelId, from, callback});
     const id = new hexToUint8Array(from);
     const client = this.connManager.createClient(new dht.SubChannel(this.dhtClient, id, channelId));
 

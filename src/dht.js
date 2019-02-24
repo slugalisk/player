@@ -19,6 +19,7 @@ const DEFAULT_PEER_REQUEST_COUNT = 10;
 class Client extends EventEmitter {
   constructor(id) {
     super();
+    this.setMaxListeners(Infinity);
 
     this.id = id;
 
@@ -95,7 +96,7 @@ class Client extends EventEmitter {
   }
 
   handleMessage(channel, event) {
-    console.log('handleMessage', event.data);
+    // console.log('handleMessage', event.data);
 
     const req = JSON.parse(event.data);
     const {type, id} = req;
@@ -246,7 +247,7 @@ class Channel {
 
 class SubChannel {
   constructor(client, peerId, id=arrayBufferToHex(randomBytes(16))) {
-    console.log('subchannel created', id);
+    // console.log('subchannel created', id);
     this.client = client;
     this.peerId = peerId;
     this.id = id;

@@ -2,11 +2,13 @@ import React, {useEffect, useState} from 'react';
 import {Server, ConnManager} from './loopback';
 import {ClientManager} from './client';
 import {ChunkedReadStream, ChunkedWriteStreamInjector} from './chunkedStream';
+import DiagnosticMenu from './DiagnosticMenu';
 
 import './App.css';
 
 const App = () => {
   const [server] = useState(new Server());
+  const [swarms, setSwarms] = useState([]);
   const [swarmUri, setSwarmUri] = useState('');
 
   useEffect(() => {
@@ -26,20 +28,26 @@ const App = () => {
     return () => injector.stop();
   }, []);
 
-  const onAddPeerClick = () => {
+  const handleAddPeerClick = () => {
     const clientManager = new ClientManager(new ConnManager(server));
 
     clientManager.createClient().then(({ppsppClient}) => {
       const swarm = ppsppClient.joinSwarm(swarmUri);
-      console.log(swarm);
+      // console.log(ppsppClient);
+
+      setSwarms([...swarms, swarm]);
+
       const stream = new ChunkedReadStream(swarm);
       stream.on('data', d => console.log(`received ${d.length} bytes`));
     });
   };
 
+  const diagnosticMenus = swarms.map((swarm, i) => <DiagnosticMenu key={i} swarm={swarm} />);
+
   return (
     <div>
-      <button onClick={onAddPeerClick}>add peer</button>
+      {diagnosticMenus}
+      <button onClick={handleAddPeerClick}>add peer</button>
     </div>
   );
 };

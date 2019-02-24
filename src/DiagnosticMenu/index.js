@@ -89,7 +89,9 @@ class SwarmState extends Component {
     return (
       <div className="swarm_state__container">
         <table>
-          {rows}
+          <tbody>
+            {rows}
+          </tbody>
         </table>
       </div>
     );
@@ -327,8 +329,6 @@ class DiagnosticMenu extends Component {
     this.state = {
       expanded: false,
     };
-
-    console.log(this.props.swarm);
   }
 
   handleButtonClick = () => {

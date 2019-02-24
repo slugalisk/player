@@ -349,7 +349,7 @@ class Peer {
   }
 }
 
-class SwarmMap extends EventEmitter {
+class SwarmSet extends EventEmitter {
   constructor() {
     super();
     this.setMaxListeners(Infinity);
@@ -358,7 +358,7 @@ class SwarmMap extends EventEmitter {
   }
 
   insert(swarm) {
-    const key = SwarmMap.swarmIdToKey(swarm.uri.swarmId);
+    const key = SwarmSet.swarmIdToKey(swarm.uri.swarmId);
     if (this.swarms[key] === undefined) {
       this.swarms[key] = swarm;
       this.emit('insert', swarm);
@@ -366,7 +366,7 @@ class SwarmMap extends EventEmitter {
   }
 
   remove(swarm) {
-    const key = SwarmMap.swarmIdToKey(swarm.uri.swarmId);
+    const key = SwarmSet.swarmIdToKey(swarm.uri.swarmId);
     if (this.swarms[key] !== undefined) {
       delete this.swarms[key];
       this.emit('remove', swarm);
@@ -374,7 +374,7 @@ class SwarmMap extends EventEmitter {
   }
 
   get(swarmId) {
-    return this.swarms[SwarmMap.swarmIdToKey(swarmId)];
+    return this.swarms[SwarmSet.swarmIdToKey(swarmId)];
   }
 
   toArray() {
@@ -390,7 +390,7 @@ class Client {
   constructor() {
     this.channels = [];
 
-    this.swarms = new SwarmMap();
+    this.swarms = new SwarmSet();
   }
 
   publishSwarm(swarm) {
@@ -433,11 +433,13 @@ class Channel extends EventEmitter {
     this.swarms = swarms;
     this.peers = {};
 
+    this.handleSwarmInsert = this.getOrCreatePeer.bind(this);
+    this.swarms.on('insert', this.handleSwarmInsert);
+
+    const liveSwarms = swarms.toArray();
+    this.channel.addEventListener('open', () => liveSwarms.forEach(this.handleSwarmInsert));
     this.channel.addEventListener('message', this.handleMessage.bind(this));
     this.channel.addEventListener('error', err => console.log('channel error:', err));
-
-    this.handleSwarmInsert = this.handleSwarmInsert.bind(this);
-    this.swarms.on('insert', this.handleSwarmInsert);
   }
 
   handleMessage(event) {
@@ -469,8 +471,7 @@ class Channel extends EventEmitter {
         return;
       }
 
-      peer = new Peer(swarm, this);
-      this.peers[peer.localId] = peer;
+      peer = this.getOrCreatePeer(swarm);
     }
 
     data = new peer.swarm.encoding.Datagram();
@@ -488,11 +489,17 @@ class Channel extends EventEmitter {
   }
 
   handleClose() {
+    this.swarms.removeListener('insert', this.handleSwarmInsert);
     Object.values(this.peers).forEach(peer => peer.close());
     this.emit('close');
   }
 
-  handleSwarmInsert(swarm) {
+  getOrCreatePeer(swarm) {
+    let peer = Object.values(this.peers).find(p => p.swarm === swarm);
+    return peer || this.createPeer(swarm);
+  }
+
+  createPeer(swarm) {
     const {peers, swarms} = this;
 
     const peer = new Peer(swarm, this);
@@ -509,6 +516,8 @@ class Channel extends EventEmitter {
     }
 
     swarms.on('remove', handleRemove);
+
+    return peer;
   }
 }
 

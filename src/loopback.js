@@ -119,7 +119,7 @@ class Client extends EventEmitter {
 
     mediator.on('datachannel', this.handleDataChannel.bind(this));
     mediator.once('connection', this.handleConnection.bind(this));
-    mediator.once('open', () => this.handleOpen.bind(this));
+    mediator.once('open', this.handleOpen.bind(this));
   }
 
   handleDataChannel(label) {
