@@ -30,11 +30,10 @@
     "reconnecting-websocket": "^3.2.2",
     "urlsafe-base64": "^1.0.0",
     "uuid": "^3.3.2",
-    "webpack-dev-server": "^3.1.11",
     "wrtc": "^0.1.6"
   },
   "scripts": {
-    "start": "NODE_ENV=development react-scripts start",
+    "start": "HTTPS=true NODE_ENV=development react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom --watch --verbose",
     "eject": "react-scripts eject",

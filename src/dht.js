@@ -47,46 +47,49 @@ class Client extends EventEmitter {
     // console.log(this.id);
   }
 
-  handlePing(channel) {
+  handlePing(channels, newChannel) {
     // might not be necessary since dropped connections are removed...
-    // console.log('handlePing', channel);
+    // console.log('handlePing', arrayBufferToHex(channel.id));
   }
 
   handleRemoved(channel) {
-    channel.channel.close();
-    // console.log('handleRemoved', channel);
+    // console.log('remove');
+    channel.conn.close();
+    // console.log('handleRemoved', arrayBufferToHex(channel.id));
   }
 
   handleUpdated(channel) {
-    // console.log('handleUpdated', channel);
+    // console.log('update');
+    // console.log('handleUpdated', arrayBufferToHex(channel.id));
   }
 
   handleAdded(channel) {
+    // console.log('add');
     // emit event?
-    // console.log('handleAdded', channel);
+    // console.log('handleAdded', arrayBufferToHex(channel.id));
   }
 
-  createChannel(id, wrtcChannel) {
-    const channel = new Channel(id, wrtcChannel);
+  createChannel(id, conn) {
+    const channel = new Channel(id, conn);
 
     this.candidates.add(channel);
 
     const messages = [];
     const bufferMessages = event => messages.push(event);
 
-    channel.channel.addEventListener('open', () => {
+    conn.addEventListener('open', () => {
       this.channels.add(channel);
 
-      channel.channel.removeEventListener('message', bufferMessages);
-      channel.channel.addEventListener('message', this.handleMessage.bind(this, channel));
+      conn.removeEventListener('message', bufferMessages);
+      conn.addEventListener('message', this.handleMessage.bind(this, channel));
       messages.forEach(event => this.handleMessage(channel, event));
 
       this.handleOpen(channel);
     });
 
-    channel.channel.addEventListener('message', bufferMessages);
-    channel.channel.addEventListener('close', this.handleClose.bind(this, channel));
-    channel.channel.addEventListener('error', this.handleError.bind(this, channel));
+    conn.addEventListener('message', bufferMessages);
+    conn.addEventListener('close', this.handleClose.bind(this, channel));
+    conn.addEventListener('error', this.handleError.bind(this, channel));
   }
 
   handleOpen({channel, id}) {
@@ -102,12 +105,13 @@ class Client extends EventEmitter {
     const {type, id} = req;
 
     if (this.seenIds.get(id)) {
-      // console.log('dropped seen message', id);
+      // console.log('discarding seen message', id);
       return;
     }
     this.seenIds.set(id, true);
 
-    this.knownRoutes.set(req.from, channel.id);
+    // what if this route broke and we don't know?
+    // this.knownRoutes.set(req.from, channel.id);
 
     const to = hexToUint8Array(req.to);
     if (!arrayEqual(to, this.id)) {
@@ -142,6 +146,7 @@ class Client extends EventEmitter {
     // console.log('forwarding message', arrayBufferToHex(to), data);
 
     if (data.hops >= MAX_HOPS) {
+      // console.log('discarding message with too many hops', data.id);
       return;
     }
     data.hops ++;
@@ -232,14 +237,14 @@ class Client extends EventEmitter {
       closest = closest.slice(0, 1);
     }
     // console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
-    closest.forEach(({channel}) => channel.send(message));
+    closest.forEach(({conn}) => conn.send(message));
   }
 }
 
 class Channel {
-  constructor(id, channel) {
+  constructor(id, conn) {
     this.id = id;
-    this.channel = channel;
+    this.conn = conn;
 
     // console.log('channel', this);
   }

@@ -3,6 +3,18 @@ body {
   overflow: hidden;
 }
 
+.diagnostic-menu--indent-1 {
+  right: 550px;
+}
+
+.diagnostic-menu--indent-2 {
+  right: 1100px;
+}
+
+.diagnostic-menu--indent-3 {
+  right: 1650px;
+}
+
 .join-form {
   display: flex;
   flex: 1;

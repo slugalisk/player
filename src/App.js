@@ -17,9 +17,8 @@ const App = () => {
 
   useEffect(() => {
     const connManager = new ConnManager(BOOTSTRAP_ADDRESS);
-    const clientManager = new ClientManager(connManager);
 
-    clientManager.createClient().then(({ppsppClient, swarmUri}) => {
+    ClientManager.createClient(connManager).then(({ppsppClient, swarmUri}) => {
       setPpsppClient(ppsppClient);
       setSwarmUri(swarmUri);
     });

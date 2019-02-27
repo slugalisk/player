@@ -29,9 +29,7 @@ const App = () => {
   }, []);
 
   const handleAddPeerClick = () => {
-    const clientManager = new ClientManager(new ConnManager(server));
-
-    clientManager.createClient().then(({ppsppClient}) => {
+    ClientManager.createClient(new ConnManager(server)).then(({ppsppClient}) => {
       const swarm = ppsppClient.joinSwarm(swarmUri);
       // console.log(ppsppClient);
 
@@ -42,7 +40,13 @@ const App = () => {
     });
   };
 
-  const diagnosticMenus = swarms.map((swarm, i) => <DiagnosticMenu key={i} swarm={swarm} />);
+  const diagnosticMenus = swarms.map((swarm, i) => (
+    <DiagnosticMenu
+      key={i}
+      swarm={swarm}
+      containerClass={`diagnostic-menu--indent-${i}`}
+    />
+  ));
 
   return (
     <div>

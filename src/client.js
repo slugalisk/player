@@ -36,33 +36,33 @@ export class ConnManager {
 }
 
 export class ClientManager {
-  constructor(connManager) {
+  constructor(connManager, dhtClientId, bootstrapId, conn, swarmUri) {
     this.connManager = connManager;
-    this.ppsppClient = new ppspp.Client();
-  }
+    this.swarmUri = swarmUri;
 
-  createClient() {
-    return this.connManager.bootstrap().then(({data, conn}) => {
-      this.initDht(data, conn);
-      return {
-        ppsppClient: this.ppsppClient,
-        swarmUri: data.swarmUri,
-      };
-    });
-  }
+    const client = connManager.createClient(conn);
 
-  initDht(data, conn) {
-    this.dhtClient = new dht.Client(hexToUint8Array(data.id));
+    this.dhtClient = new dht.Client(dhtClientId);
     this.dhtClient.on('peers.discover', this.handlePeersDiscover.bind(this));
     this.dhtClient.on('receive.connect.request', this.handleReceiveConnectRequest.bind(this));
-
-    const client = this.connManager.createClient(conn);
-
-    const bootstrapId = hexToUint8Array(data.bootstrapId);
     this.dhtClient.createChannel(bootstrapId, client.createDataChannel('dht'));
+
+    this.ppsppClient = new ppspp.Client();
     this.ppsppClient.createChannel(client.createDataChannel('ppspp'));
 
     client.init();
+  }
+
+  static createClient(connManager) {
+    return connManager.bootstrap().then(({data, conn}) => {
+      return new ClientManager(
+        connManager,
+        hexToUint8Array(data.id),
+        hexToUint8Array(data.bootstrapId),
+        conn,
+        data.swarmUri,
+      );
+    });
   }
 
   handlePeersDiscover(ids) {

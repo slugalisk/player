@@ -348,10 +348,13 @@ class DiagnosticMenu extends Component {
   }
 
   render() {
-    const containerClasses = classNames({
-      'diagnostic_menu__container': true,
-      'diagnostic_menu__container--expanded': this.state.expanded,
-    });
+    const containerClasses = classNames(
+      this.props.containerClass,
+      {
+        'diagnostic_menu__container': true,
+        'diagnostic_menu__container--expanded': this.state.expanded,
+      },
+    );
 
     const {
       lastCompletedBin,

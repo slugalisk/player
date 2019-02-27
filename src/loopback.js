@@ -1,14 +1,8 @@
 const ppspp = require('./ppspp');
 const dht = require('./dht');
-const crypto = require('crypto');
 const {EventEmitter} = require('events');
 const arrayBufferToHex = require('array-buffer-to-hex');
-
-const createRandomId = () => {
-  const id = new Uint8Array(16);
-  crypto.randomFillSync(id);
-  return id;
-};
+const createRandomId = require('./utils/createRandomId');
 
 class Server {
   constructor() {
