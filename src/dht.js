@@ -9,8 +9,8 @@ const hexToUint8Array = require('./hexToUint8Array');
 const SEND_REPLICAS = 2;
 const MAX_HOPS = 10;
 const DEFAULT_PEER_REQUEST_COUNT = 10;
+const NUMBER_OF_NODES_PER_BUCKET = 15;
 
-// TODO: avoid opening every available connection
 // TODO: replace dropped connections
 // TODO: implement get/set
 // TODO: implement connection dump rpc for network debugging
@@ -24,7 +24,7 @@ class Client extends EventEmitter {
     this.id = id;
 
     this.channels = new KBucket({
-      numberOfNodesPerKBucket: 4,
+      numberOfNodesPerKBucket: NUMBER_OF_NODES_PER_BUCKET,
       localNodeId: this.id,
     });
 
@@ -33,10 +33,6 @@ class Client extends EventEmitter {
     this.channels.on('updated', this.handleUpdated.bind(this));
     this.channels.on('added', this.handleAdded.bind(this));
 
-    this.candidates = new KBucket({
-      numberOfNodesPerKBucket: 4,
-      localNodeId: this.id,
-    });
     this.seenIds = new LRU({max: 1024});
     this.knownRoutes = new LRU({
       max: 1024,
@@ -44,26 +40,71 @@ class Client extends EventEmitter {
     });
     this.callbacks = new LRU({max: 1024});
 
-    // console.log(this.id);
+    this.on('receive.peers.request', this.handlePeersRequest.bind(this));
+    this.on('receive.ping.request', this.handlePingRequest.bind(this));
+    this.on('receive.callback.response', this.handleCallbackResponse.bind(this));
   }
 
   handlePing(channels, newChannel) {
-    // might not be necessary since dropped connections are removed...
-    // console.log('handlePing', arrayBufferToHex(channel.id));
+    // console.log('ping', channels, newChannel);
+    const PING_TIMEOUT = 1000;
+    const CONNECT_TIMEOUT = 1000;
+
+    channels.forEach(channel => {
+      const {id} = channel;
+
+      // console.log('>>> conn exists, pinging');
+      // TODO: maybe keep track of how recently we pinged? debounce
+      const replaceChannel = () => {
+        // console.log('>>> ping timeout');
+        this.channels.remove(id);
+        this.channels.add(newChannel);
+      };
+
+      // TODO: connection up/down getter
+      if (channel.conn == null) {
+        // console.log('>>> channel undefined, waiting to see if it gets replaced');
+        setTimeout(() => {
+          const channel = this.channels.get(id);
+          if (channel != null && channel.conn != null) {
+            this.channels.add(channel);
+            return;
+          }
+          replaceChannel();
+        }, CONNECT_TIMEOUT);
+
+        return;
+      }
+
+      // console.log('ping', arrayBufferToHex(id));
+      const replaceChannelTimeout = setTimeout(replaceChannel, PING_TIMEOUT);
+      const clearReplaceChannelTimeout = () => {
+        // console.log('>>> clear timeout');
+        clearTimeout(replaceChannelTimeout);
+        this.channels.add(channel);
+      };
+      this.send(id, 'ping.request', {}, clearReplaceChannelTimeout);
+    });
   }
 
   handleRemoved(channel) {
-    // console.log('remove');
-    channel.conn.close();
+    // console.log('remove', arrayBufferToHex(channel.id));
+    if (channel.conn) {
+      channel.conn.close();
+    }
     // console.log('handleRemoved', arrayBufferToHex(channel.id));
   }
 
-  handleUpdated(channel) {
-    // console.log('update');
+  handleUpdated(oldChannel, newChannel) {
+    // console.log('update', {oldChannel, newChannel});
     // console.log('handleUpdated', arrayBufferToHex(channel.id));
   }
 
   handleAdded(channel) {
+    if (channel.conn === undefined) {
+      // console.log('peers.discover', arrayBufferToHex(this.id), arrayBufferToHex(channel.id), this.channels.count());
+      this.emit('peers.discover', channel.id);
+    }
     // console.log('add');
     // emit event?
     // console.log('handleAdded', arrayBufferToHex(channel.id));
@@ -72,7 +113,8 @@ class Client extends EventEmitter {
   createChannel(id, conn) {
     const channel = new Channel(id, conn);
 
-    this.candidates.add(channel);
+    // console.log('create channel');
+    // this.candidates.add(channel);
 
     const messages = [];
     const bufferMessages = event => messages.push(event);
@@ -84,18 +126,12 @@ class Client extends EventEmitter {
       conn.addEventListener('message', this.handleMessage.bind(this, channel));
       messages.forEach(event => this.handleMessage(channel, event));
 
-      this.handleOpen(channel);
+      this.send(id, 'peers.request', {}, this.handlePeersResponse.bind(this));
     });
 
     conn.addEventListener('message', bufferMessages);
     conn.addEventListener('close', this.handleClose.bind(this, channel));
     conn.addEventListener('error', this.handleError.bind(this, channel));
-  }
-
-  handleOpen({channel, id}) {
-    // console.log('handleOpen', arrayBufferToHex(id));
-
-    this.send(id, 'peers.request', this.handlePeersResponse.bind(this));
   }
 
   handleMessage(channel, event) {
@@ -110,8 +146,7 @@ class Client extends EventEmitter {
     }
     this.seenIds.set(id, true);
 
-    // what if this route broke and we don't know?
-    // this.knownRoutes.set(req.from, channel.id);
+    this.knownRoutes.set(req.from, channel.id);
 
     const to = hexToUint8Array(req.to);
     if (!arrayEqual(to, this.id)) {
@@ -125,21 +160,8 @@ class Client extends EventEmitter {
       this.send(from, 'callback.response', data, callback);
     };
 
-    if (type === 'peers.request') {
-      this.handlePeersRequest(req, resCallback);
-    } else if (type === 'ping.request') {
-      resCallback();
-    } else if (type === 'callback.response') {
-      const reqCallback = this.callbacks.get(req.re);
-      if (reqCallback) {
-        reqCallback(req, resCallback);
-      } else {
-        // console.warn('<<< callback for %s expired', req.re);
-      }
-    } else {
-      // console.log(`emit receive.${type}`, req);
-      this.emit(`receive.${type}`, {data: req, callback: resCallback});
-    }
+    // console.log(`emit receive.${type}`, req);
+    this.emit(`receive.${type}`, {data: req, callback: resCallback});
   }
 
   forwardMessage(to, data) {
@@ -164,7 +186,20 @@ class Client extends EventEmitter {
     // console.log('error', error);
   }
 
-  handlePeersRequest({count=DEFAULT_PEER_REQUEST_COUNT, from}, callback) {
+  handlePingRequest({callback}) {
+    callback();
+  }
+
+  handleCallbackResponse({data, callback}) {
+    const reqCallback = this.callbacks.get(data.re);
+    if (reqCallback) {
+      reqCallback(data, callback);
+    } else {
+      // console.warn('<<< callback for %s expired', data.re);
+    }
+  }
+
+  handlePeersRequest({data: {count=DEFAULT_PEER_REQUEST_COUNT, from}, callback}) {
     // console.log('handlePeersRequest');
 
     const ids = this.channels.closest(hexToUint8Array(from), count)
@@ -175,19 +210,10 @@ class Client extends EventEmitter {
   handlePeersResponse(res) {
     // console.log('handlePeersResponse', res.ids);
 
-    const ids = res.ids
+    res.ids
       .map(id => hexToUint8Array(id))
-      .filter(id => {
-        return this.channels.get(id) == null
-          && this.candidates.get(id) == null
-          && !arrayEqual(id, this.id);
-      });
-
-    // console.log('received peers', ids.map(arrayBufferToHex));
-
-    if (ids.length) {
-      this.emit('peers.discover', ids);
-    }
+      .filter(id => this.channels.get(id) == null && !arrayEqual(id, this.id))
+      .forEach(id => this.channels.add(new Channel(id)));
   }
 
   send(to, type, data={}, callback=null) {
@@ -218,18 +244,20 @@ class Client extends EventEmitter {
   }
 
   sendRaw(to, message) {
-    let closest = this.channels.closest(to, SEND_REPLICAS);
+    let closest = this.channels.closest(to)
+      .filter(({conn}) => conn != null)
+      .slice(0, SEND_REPLICAS);
 
     const knownRoute = this.knownRoutes.get(arrayBufferToHex(to));
     if (knownRoute) {
       const channel = this.channels.get(knownRoute);
-      if (channel != null) {
+      if (channel != null && channel.conn != null) {
         closest.push(channel);
       }
     }
 
     if (closest.length === 0) {
-      // console.warn(`closest value to ${arrayBufferToHex(to)} does not exist`);
+      // console.warn(`closest value to ${arrayBufferToHex(to)} does not exist, dropping`, message);
       return;
     }
 
@@ -237,6 +265,7 @@ class Client extends EventEmitter {
       closest = closest.slice(0, 1);
     }
     // console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
+    // console.log(closest.length, closest.filter(({conn}) => !!conn).length, message);
     closest.forEach(({conn}) => conn.send(message));
   }
 }
@@ -244,6 +273,7 @@ class Client extends EventEmitter {
 class Channel {
   constructor(id, conn) {
     this.id = id;
+    this.vectorClock = Date.now();
     this.conn = conn;
 
     // console.log('channel', this);

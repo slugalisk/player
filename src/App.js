@@ -1,7 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
 import SwarmPlayer from './SwarmPlayer';
-import {ConnManager, ClientManager} from './client';
+import {Client} from './client';
+import {ConnManager} from './wrtc';
 // import {ChunkedReadStream} from './chunkedStream';
 
 import './App.css';
@@ -18,7 +19,7 @@ const App = () => {
   useEffect(() => {
     const connManager = new ConnManager(BOOTSTRAP_ADDRESS);
 
-    ClientManager.createClient(connManager).then(({ppsppClient, swarmUri}) => {
+    Client.create(connManager).then(({ppsppClient, swarmUri}) => {
       setPpsppClient(ppsppClient);
       setSwarmUri(swarmUri);
     });

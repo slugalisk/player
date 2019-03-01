@@ -5,6 +5,38 @@ const {
   RTCIceCandidate,
 } = require('wrtc');
 
+class ConnManager {
+  constructor(bootstrapAddress) {
+    this.bootstrapAddress = bootstrapAddress;
+  }
+
+  bootstrap() {
+    return new Promise((resolve, reject) => {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const conn = new WebSocket(`${protocol}://${this.bootstrapAddress}`);
+      conn.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'bootstrap') {
+          resolve({data, conn});
+        } else {
+          reject(new Error(`expected bootstrap, received: ${event.data}`));
+        }
+      };
+    });
+  }
+
+  createClient(conn) {
+    const mediator = new Mediator(conn);
+    const client = new Client(mediator);
+
+    // TODO: retry?
+    mediator.once('error', () => conn.close());
+    client.once('open', () => conn.close());
+
+    return client;
+  }
+}
+
 class Mediator extends EventEmitter {
   constructor(conn) {
     super();
@@ -147,6 +179,7 @@ class Client extends EventEmitter {
 }
 
 module.exports = {
+  ConnManager,
   Mediator,
   Client,
 };

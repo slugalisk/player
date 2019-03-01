@@ -1,18 +1,61 @@
-import {Client, Channel, SubChannel} from './dht';
-import { EventEmitter } from 'events';
-const createRandomId = require('./utils/createRandomId');
+jest.mock('utils/createRandomId');
 
-it('handle replacing peers', () => {
-  const client = new Client(createRandomId());
+import {Server, ConnManager} from './loopback';
+import {Client} from './client';
 
-  for (let i = 0; i < 100; i ++) {
-    const conn = new EventEmitter();
-    conn.addEventListener = (...args) => conn.on(...args);
-    conn.removeEventListener = (...args) => conn.removeListener(...args);
-    conn.send = () => {};
+it('dht clients can send and receive messages', async () => {
+  const indices = new Array(3).fill(0).map((_, i) => i);
+  const pairs = indices.reduce((pairs, src) => pairs.concat(indices.filter(i => i !== src).map(dst => ({src, dst}))), []);
 
-    client.createChannel(createRandomId(), conn);
+  const connManager = new ConnManager(new Server());
+  const clients = await Promise.all(indices.map(() => Client.create(connManager)));
+  const dhtClients = clients.map(({dhtClient}) => dhtClient);
 
-    conn.emit('open');
-  }
+  dhtClients.forEach(client => client.on('receive.test', ({callback}) => callback()));
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+    .then(() => Promise.all(pairs.map(({src, dst}) => Promise.race([
+      new Promise(resolve => dhtClients[src].send(dhtClients[dst].id, 'test', {src, dst}, resolve)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('callback timeout')), 3000)),
+    ]))));
+});
+
+it('dht clients can process messages in busy clusters', async () => {
+  const indices = new Array(20).fill(0).map((_, i) => i);
+  const pairs = indices.reduce((pairs, src) => pairs.concat(indices.filter(i => i !== src).map(dst => ({src, dst}))), []);
+
+  const connManager = new ConnManager(new Server());
+  const clients = await Promise.all(indices.map(() => Client.create(connManager)));
+  const dhtClients = clients.map(({dhtClient}) => dhtClient);
+
+  dhtClients.forEach(client => client.on('receive.test', ({callback}) => callback()));
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+    .then(() => Promise.all(pairs.map(({src, dst}) => Promise.race([
+      new Promise(resolve => dhtClients[src].send(dhtClients[dst].id, 'test', {src, dst}, resolve)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('callback timeout')), 3000)),
+    ]))));
+});
+
+it('dht clients can respond to messages via callbacks', async () => {
+  const indices = new Array(3).fill(0).map((_, i) => i);
+  const pairs = indices.reduce((pairs, src) => pairs.concat(indices.filter(i => i !== src).map(dst => ({src, dst}))), []);
+
+  const connManager = new ConnManager(new Server());
+  const clients = await Promise.all(indices.map(() => Client.create(connManager)));
+  const dhtClients = clients.map(({dhtClient}) => dhtClient);
+
+  dhtClients.forEach(client => client.on('receive.test', ({data: {src, dst}, callback}) => callback({src, dst})));
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+    .then(() => Promise.all(pairs.map(({src, dst}) => Promise.race([
+      new Promise((resolve, reject) => dhtClients[src].send(dhtClients[dst].id, 'test', {src, dst}, (data) => {
+        if (src === data.src && dst === data.dst) {
+          resolve();
+        } else {
+          reject(new Error(`recv mismatch {src: ${src}, dst: ${dst}} vs {src: ${data.src}, dst: ${data.dst}}`));
+        }
+      })),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('callback timeout')), 3000)),
+    ]))));
 });

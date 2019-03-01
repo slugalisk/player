@@ -52,14 +52,26 @@ class Conn extends EventEmitter {
   constructor(remote) {
     super();
     this.remote = remote || new Conn(this);
+    this.remote.remote = this;
     this.onmessage = () => {};
   }
 
   send(data) {
-    this.remote.emit('message', {data});
-    this.remote.onmessage({data});
+    setImmediate(() => {
+      this.remote.emit('message', {data});
+      this.remote.onmessage({data});
+    });
   }
 
+  addEventListener(...args) {
+    this.on(...args);
+  }
+
+  removeEventListener(...args) {
+    this.removeListener(...args);
+  }
+
+  // TODO: this should do something...?
   close() {}
 }
 
@@ -74,56 +86,50 @@ class Mediator extends EventEmitter {
     const data = JSON.parse(event.data);
     switch (data.type) {
       case 'connection':
-        data.datachannels.forEach(label => this.emit('datachannel', label));
-        this.emit('connection', Mediator.conns[data.id]);
-        this.emit('open', Mediator.conns[data.id]);
-        delete Mediator.conns[data.id];
+        this.handleConnection(data);
         break;
       default:
         this.emit('error', new Error('unsupported mediator event type'));
     }
   }
 
-  sendConnection(conn, datachannels) {
-    this.emit('connection', conn);
+  handleConnection({id}) {
+    const datachannels = Mediator.datachannels[id];
+    delete Mediator.datachannels[id];
 
+    Object.entries(datachannels).forEach(([label, channel]) => this.emit('datachannel', label, channel));
+    this.emit('open');
+  }
+
+  sendConnection(datachannels) {
     const id = Mediator.nextId ++;
-    Mediator.conns[id] = conn.remote;
+    Mediator.datachannels[id] = datachannels;
 
     this.conn.send(JSON.stringify({
       type: 'connection',
       id,
-      datachannels,
     }));
 
-    this.emit('open', conn);
+    this.emit('open');
   }
 }
 
 Mediator.nextId = 0;
-Mediator.conns = {};
+Mediator.datachannels = {};
 
 class Client extends EventEmitter {
   constructor(mediator) {
     super();
 
     this.mediator = mediator;
-    this.conn = null;
     this.datachannels = {};
 
     mediator.on('datachannel', this.handleDataChannel.bind(this));
-    mediator.once('connection', this.handleConnection.bind(this));
     mediator.once('open', this.handleOpen.bind(this));
   }
 
-  handleDataChannel(label) {
-    this.datachannels[label] = new ClientDataChannel(this, label);
-    this.emit('datachannel', {channel: this.datachannels[label]});
-  }
-
-  handleConnection(conn) {
-    this.conn = conn;
-    conn.client = this;
+  handleDataChannel(label, conn) {
+    this.emit('datachannel', {label, channel: new ClientDataChannel(this, label, conn)});
   }
 
   handleOpen() {
@@ -136,31 +142,18 @@ class Client extends EventEmitter {
   }
 
   init() {
-    this.mediator.sendConnection(new Conn(), Object.keys(this.datachannels));
+    this.mediator.sendConnection(this.datachannels);
   }
 }
 
-class ClientDataChannel extends EventEmitter {
-  constructor(client, label) {
-    super();
+class ClientDataChannel extends Conn {
+  constructor(client, label, remote) {
+    super(remote);
 
     this.client = client;
     this.label = label;
 
     this.client.on('open', () => this.emit('open'));
-    this.send = this.send.bind(this);
-  }
-
-  send(data) {
-    setImmediate(() => this.client.conn.remote.client.datachannels[this.label].emit('message', {data}));
-  }
-
-  addEventListener(...args) {
-    this.on(...args);
-  }
-
-  removeEventListener(...args) {
-    this.removeListener(...args);
   }
 }
 

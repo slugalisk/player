@@ -28,6 +28,7 @@
     "react-router-dom": "^4.3.1",
     "react-scripts": "1.1.4",
     "reconnecting-websocket": "^3.2.2",
+    "seedrandom": "^2.4.4",
     "urlsafe-base64": "^1.0.0",
     "uuid": "^3.3.2",
     "wrtc": "^0.1.6"
@@ -35,7 +36,7 @@
   "scripts": {
     "start": "HTTPS=true NODE_ENV=development react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom --watch --verbose",
+    "test": "react-scripts test --env=jsdom --watch --verbose false",
     "eject": "react-scripts eject",
     "server": "nodemon --delay 2.5s src/server.js"
   },

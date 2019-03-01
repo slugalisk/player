@@ -414,8 +414,8 @@ class Client {
     return swarm;
   }
 
-  createChannel(wrtcChannel) {
-    const channel = new Channel(wrtcChannel, this.swarms);
+  createChannel(conn) {
+    const channel = new Channel(conn, this.swarms);
     this.channels.push(channel);
 
     channel.once('close', () => {
@@ -426,10 +426,10 @@ class Client {
 }
 
 class Channel extends EventEmitter {
-  constructor(channel, swarms) {
+  constructor(conn, swarms) {
     super();
 
-    this.channel = channel;
+    this.conn = conn;
     this.swarms = swarms;
     this.peers = {};
 
@@ -437,9 +437,9 @@ class Channel extends EventEmitter {
     this.swarms.on('insert', this.handleSwarmInsert);
 
     const liveSwarms = swarms.toArray();
-    this.channel.addEventListener('open', () => liveSwarms.forEach(this.handleSwarmInsert));
-    this.channel.addEventListener('message', this.handleMessage.bind(this));
-    this.channel.addEventListener('error', err => console.log('channel error:', err));
+    this.conn.addEventListener('open', () => liveSwarms.forEach(this.handleSwarmInsert));
+    this.conn.addEventListener('message', this.handleMessage.bind(this));
+    this.conn.addEventListener('error', err => console.log('connection error:', err));
   }
 
   handleMessage(event) {
@@ -481,7 +481,7 @@ class Channel extends EventEmitter {
 
   send(data) {
     try {
-      this.channel.send(data.toBuffer());
+      this.conn.send(data.toBuffer());
     } catch (error) {
       console.log('encountered error while sending', error);
       this.handleClose();

@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Server, ConnManager} from './loopback';
-import {ClientManager} from './client';
+import {Client} from './client';
 import {ChunkedReadStream, ChunkedWriteStreamInjector} from './chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
 
@@ -29,7 +29,7 @@ const App = () => {
   }, []);
 
   const handleAddPeerClick = () => {
-    ClientManager.createClient(new ConnManager(server)).then(({ppsppClient}) => {
+    Client.create(new ConnManager(server)).then(({ppsppClient}) => {
       const swarm = ppsppClient.joinSwarm(swarmUri);
       // console.log(ppsppClient);
 
