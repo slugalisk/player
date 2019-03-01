@@ -13,12 +13,11 @@
     ```
     yarn install
     ```
-4. patch wrtc module (https://github.com/zeit/pkg/issues/364#issuecomment-443608978)
-5. start ui dev server with
+4. start ui dev server with
     ```
     yarn start
     ```
-6. open `https://localhost:3000/test`
+5. open `https://localhost:3000/test`
 
 #### Running the ingest server
 

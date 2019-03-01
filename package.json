@@ -31,7 +31,7 @@
     "seedrandom": "^2.4.4",
     "urlsafe-base64": "^1.0.0",
     "uuid": "^3.3.2",
-    "wrtc": "^0.1.6"
+    "wrtc": "^0.3.5"
   },
   "scripts": {
     "start": "HTTPS=true NODE_ENV=development react-scripts start",
@@ -41,6 +41,7 @@
     "server": "nodemon --delay 2.5s src/server.js"
   },
   "devDependencies": {
-    "nodemon": "^1.18.3"
+    "nodemon": "^1.18.3",
+    "webpack-dev-server": "^3.1.11"
   }
 }
