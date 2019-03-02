@@ -1,6 +1,6 @@
-const ppspp = require('./ppspp');
-const dht = require('./dht');
-const hexToUint8Array = require('./hexToUint8Array');
+import * as ppspp from './ppspp';
+import * as dht from './dht';
+import hexToUint8Array from './hexToUint8Array';
 
 export class Client {
   constructor(connManager, dhtClientId, bootstrapId, conn, swarmUri) {

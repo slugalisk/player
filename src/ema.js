@@ -1,4 +1,4 @@
-class EMA {
+export default class EMA {
   constructor(alpha) {
     this.mean = 0;
     this.alpha = alpha;
@@ -23,5 +23,3 @@ class EMA {
     return this.mean / (1 - this.weight);
   }
 }
-
-module.exports = EMA;

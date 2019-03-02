@@ -1,5 +1,5 @@
-const hexToArrayBuffer = require('hex-to-array-buffer');
+import hexToArrayBuffer from 'hex-to-array-buffer';
 
-module.exports = function hexToUint8Array(v) {
+export default function hexToUint8Array(v) {
   return new Uint8Array(hexToArrayBuffer(v));
 }

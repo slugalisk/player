@@ -1,10 +1,10 @@
-const KBucket = require('k-bucket');
-const {EventEmitter} = require('events');
-const arrayBufferToHex = require('array-buffer-to-hex');
-const arrayEqual = require('array-equal');
-const randomBytes = require('randombytes');
-const LRU = require('lru-cache');
-const hexToUint8Array = require('./hexToUint8Array');
+import KBucket from 'k-bucket';
+import {EventEmitter} from 'events';
+import arrayBufferToHex from 'array-buffer-to-hex';
+import arrayEqual from 'array-equal';
+import randomBytes from 'randombytes';
+import LRU from 'lru-cache';
+import hexToUint8Array from './hexToUint8Array';
 
 const SEND_REPLICAS = 2;
 const MAX_HOPS = 10;
@@ -16,7 +16,7 @@ const NUMBER_OF_NODES_PER_BUCKET = 15;
 // TODO: implement connection dump rpc for network debugging
 // TODO: update peers with new peer lists periodically
 
-class Client extends EventEmitter {
+export class Client extends EventEmitter {
   constructor(id) {
     super();
     this.setMaxListeners(Infinity);
@@ -270,7 +270,7 @@ class Client extends EventEmitter {
   }
 }
 
-class Channel {
+export class Channel {
   constructor(id, conn) {
     this.id = id;
     this.vectorClock = Date.now();
@@ -280,7 +280,7 @@ class Channel {
   }
 }
 
-class SubChannel {
+export class SubChannel {
   constructor(client, peerId, id=arrayBufferToHex(randomBytes(16))) {
     // console.log('subchannel created', id);
     this.client = client;
@@ -321,10 +321,4 @@ class SubChannel {
 SubChannel.ReadyStates = {
   OPEN: 1,
   CLOSED: 3,
-};
-
-module.exports = {
-  Client,
-  Channel,
-  SubChannel,
 };

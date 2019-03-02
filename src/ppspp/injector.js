@@ -1,17 +1,17 @@
-const {EventEmitter} = require('events');
-const crypto = require('crypto');
-const {generateKeyPair} = require('./integrity');
-const URI = require('./uri');
-const {
+import {EventEmitter} from 'events';
+import crypto from 'crypto';
+import {generateKeyPair} from './integrity';
+import URI from './uri';
+import {
   ChunkAddressingMethod,
   ContentIntegrityProtectionMethod,
   MerkleHashTreeFunction,
   LiveSignatureAlgorithm,
   ProtocolOptions,
-} = require('./constants');
-const {Swarm} = require('../ppspp');
+} from './constants';
+import {Swarm} from '../ppspp';
 
-class Injector {
+export default class Injector {
   constructor(swarm, chunkSize, chunksPerSignature) {
     this.swarm = swarm;
     this.chunkSize = chunkSize;
@@ -86,7 +86,7 @@ class Injector {
   }
 }
 
-class NoiseInjector extends EventEmitter {
+export class NoiseInjector extends EventEmitter {
   constructor(dataRate = 3.5e6 / 8, interval = 250) {
     super();
     this.dataRate = dataRate * (interval / 1000);
@@ -112,6 +112,3 @@ class NoiseInjector extends EventEmitter {
     }
   }
 }
-
-module.exports = Injector;
-module.exports.NoiseInjector = NoiseInjector;

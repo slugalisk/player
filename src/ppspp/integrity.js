@@ -1,19 +1,22 @@
-const {Buffer} = require('buffer');
-const arrayEqual = require('array-equal');
-const crypto = require(process.env.REACT_APP_CRYPTO_PLUGIN);
-const binSearch = require('../binSearch');
-const Address = require('./address');
-const SwarmId = require('./swarmid');
+import {Buffer} from 'buffer';
+import arrayEqual from 'array-equal';
+import binSearch from '../binSearch';
+import Address from './address';
+import SwarmId from './swarmid';
 
-const {
+import {
   ContentIntegrityProtectionMethod,
   MerkleHashTreeFunction,
   LiveSignatureAlgorithm,
-} = require('./constants');
+} from './constants';
+
+const crypto = typeof window === 'undefined'
+  ? require('./webcrypto')
+  : require('./crypto');
 
 const toUint8Array = data => new Uint8Array(data);
 
-const MerkleHashTreeFunctionAlgorithms = {
+export const MerkleHashTreeFunctionAlgorithms = {
   [MerkleHashTreeFunction.SHA1]: 'SHA-1',
   [MerkleHashTreeFunction.SHA224]: 'SHA-224',
   [MerkleHashTreeFunction.SHA256]: 'SHA-256',
@@ -21,7 +24,7 @@ const MerkleHashTreeFunctionAlgorithms = {
   [MerkleHashTreeFunction.SHA512]: 'SHA-512',
 };
 
-const MerkleHashTreeFunctionByteLengths = {
+export const MerkleHashTreeFunctionByteLengths = {
   [MerkleHashTreeFunction.SHA1]: 20,
   [MerkleHashTreeFunction.SHA224]: 28,
   [MerkleHashTreeFunction.SHA256]: 32,
@@ -29,7 +32,7 @@ const MerkleHashTreeFunctionByteLengths = {
   [MerkleHashTreeFunction.SHA512]: 64,
 };
 
-const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
+export const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
   const algorithm = MerkleHashTreeFunctionAlgorithms[merkleHashTreeFunction];
   if (algorithm === undefined) {
     throw new Error('invalid merkle hash tree function');
@@ -54,7 +57,7 @@ const createMerkleHashTreeFunction = (merkleHashTreeFunction) => {
   };
 };
 
-const LiveSignatureAlgorithms = {
+export const LiveSignatureAlgorithms = {
   [LiveSignatureAlgorithm.RSASHA1]: {
     name: 'RSASSA-PKCS1-v1_5',
     modulusLength: 2048,
@@ -79,7 +82,7 @@ const LiveSignatureAlgorithms = {
   },
 };
 
-const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey, algorithm = {}) => {
+export const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey, algorithm = {}) => {
   algorithm = {
     ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
     ...algorithm,
@@ -92,7 +95,7 @@ const createLiveSignatureSignFunction = (liveSignatureAlgorithm, privateKey, alg
     .then(toUint8Array);
 };
 
-const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, swarmId, algorithm = {}) => {
+export const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, swarmId, algorithm = {}) => {
   algorithm = {
     ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
     ...swarmId.getKeyParams(),
@@ -107,7 +110,7 @@ const createLiveSignatureVerifyFunction = (liveSignatureAlgorithm, swarmId, algo
     .then(toUint8Array);
 };
 
-const generateKeyPair = (liveSignatureAlgorithm, algorithm = {}) => {
+export const generateKeyPair = (liveSignatureAlgorithm, algorithm = {}) => {
   algorithm = {
     ...LiveSignatureAlgorithms[liveSignatureAlgorithm],
     ...algorithm,
@@ -131,7 +134,7 @@ const generateKeyPair = (liveSignatureAlgorithm, algorithm = {}) => {
 
 const unavailableLiveSignatureSignFunction = () => Promise.reject('live signature function not available');
 
-const createContentIntegrityVerifierFactory = (
+export const createContentIntegrityVerifierFactory = (
   contentIntegrityProtectionMethod,
   merkleHashTreeFunction,
   liveSignatureVerifyFunction,
@@ -483,15 +486,4 @@ const createContentIntegrityVerifierFactory = (
     default:
       throw new Error('unsupported content integrity protection method');
   }
-};
-
-module.exports = {
-  MerkleHashTreeFunctionByteLengths,
-  MerkleHashTreeFunctionAlgorithms,
-  LiveSignatureAlgorithms,
-  createMerkleHashTreeFunction,
-  createLiveSignatureSignFunction,
-  createLiveSignatureVerifyFunction,
-  createContentIntegrityVerifierFactory,
-  generateKeyPair,
 };

@@ -13,7 +13,7 @@ function applyMask(byte, mask, value) {
   return byte & (255 ^ mask);
 }
 
-class BitArray {
+export default class BitArray {
   constructor(capacity = 0) {
     this.offset = 0;
     this.resize(capacity);
@@ -173,5 +173,3 @@ class BitArray {
     return -Infinity;
   }
 }
-
-module.exports = BitArray;

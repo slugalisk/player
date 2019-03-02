@@ -1,4 +1,4 @@
-class RingBuffer {
+export default class RingBuffer {
   constructor(capacity) {
     this.setCapacity(capacity);
   }
@@ -49,5 +49,3 @@ class RingBuffer {
     this.set(this.lastIndex, value);
   }
 }
-
-module.exports = RingBuffer;

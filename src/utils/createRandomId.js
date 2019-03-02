@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const createRandomId = () => {
   const id = new Uint8Array(16);
@@ -6,4 +6,4 @@ const createRandomId = () => {
   return id;
 };
 
-module.exports = createRandomId;
+export default createRandomId;

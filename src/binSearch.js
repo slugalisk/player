@@ -1,4 +1,4 @@
-function binSearch(max, comparator) {
+export default function binSearch(max, comparator) {
   let left = 0;
   let right = max;
 
@@ -16,5 +16,3 @@ function binSearch(max, comparator) {
   }
   return -(left + 1);
 }
-
-module.exports = binSearch;

@@ -1,18 +1,18 @@
 require('dotenv').config();
 
-const http = require('http');
-const express = require('express');
-const ws = require('ws');
-const hilbert = require('hilbert');
-const ip2location = require('ip2location-nodejs');
-const path = require('path');
-const crypto = require('crypto');
-const arrayBufferToHex = require('array-buffer-to-hex');
-const NginxInjector = require('./NginxInjector');
-// const {ChunkedWriteStreamInjector} = require('./chunkedStream');
-const dht = require('./dht');
-const ppspp = require('./ppspp');
-const wrtc = require('./wrtc');
+import http from 'http';
+import express from 'express';
+import ws from 'ws';
+import hilbert from 'hilbert';
+import ip2location from 'ip2location-nodejs';
+import path from 'path';
+import crypto from 'crypto';
+import arrayBufferToHex from 'array-buffer-to-hex';
+import NginxInjector from './NginxInjector';
+// import {ChunkedWriteStreamInjector} from './chunkedStream';
+import * as dht from './dht';
+import * as ppspp from './ppspp';
+import * as wrtc from './wrtc';
 
 ip2location.IP2Location_init(path.join(__dirname, '../vendor/IP2LOCATION-LITE-DB5.BIN'));
 

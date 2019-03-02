@@ -1,8 +1,8 @@
-const {Buffer} = require('buffer');
-const {binBounds} = require('./address');
-const {MerkleHashTreeFunctionByteLengths} = require('./integrity');
+import {Buffer} from 'buffer';
+import Address from './address';
+import {MerkleHashTreeFunctionByteLengths} from './integrity';
 
-const {
+import {
   ProtocolOptions,
   Version,
   ContentIntegrityProtectionMethod,
@@ -10,9 +10,9 @@ const {
   LiveSignatureAlgorithm,
   ChunkAddressingMethod,
   MessageTypes,
-} = require('./constants');
+} from './constants';
 
-const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
+export const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
   class Bin32ChunkAddress {
     constructor(value = 0) {
       this.type = ChunkAddressingMethod.Bin32;
@@ -33,7 +33,7 @@ const createChunkAddressFieldType = (addressingMethod, chunkSize) => {
     }
 
     rangeByteLength() {
-      const [start, end] = binBounds(this.value);
+      const [start, end] = Address.binBounds(this.value);
       return (end - start + 1) * chunkSize;
     }
 
@@ -106,7 +106,7 @@ const createBufferFieldType = byteLength => {
   return BufferField;
 };
 
-const createLiveSignatureFieldType = (liveSignatureAlgorithm, swarmId) => {
+export const createLiveSignatureFieldType = (liveSignatureAlgorithm, swarmId) => {
   const byteLength = swarmId.getLiveSignatureByteLength();
 
   class LiveSignatureField extends createBufferFieldType(byteLength) {
@@ -119,7 +119,7 @@ const createLiveSignatureFieldType = (liveSignatureAlgorithm, swarmId) => {
   return LiveSignatureField;
 };
 
-const createIntegrityHashFieldType = merkleHashTreeFunction => {
+export const createIntegrityHashFieldType = merkleHashTreeFunction => {
   const byteLength = MerkleHashTreeFunctionByteLengths[merkleHashTreeFunction];
 
   class IntegrityHashField extends createBufferFieldType(byteLength) {
@@ -132,7 +132,7 @@ const createIntegrityHashFieldType = merkleHashTreeFunction => {
   return IntegrityHashField;
 };
 
-const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
+export const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
   class Uint8ProtocolOption {
     constructor(value = 0) {
       this.value = value;
@@ -728,11 +728,4 @@ const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
     IntegrityHash,
     ChunkAddress,
   };
-};
-
-module.exports = {
-  createChunkAddressFieldType,
-  createLiveSignatureFieldType,
-  createIntegrityHashFieldType,
-  createEncoding,
 };

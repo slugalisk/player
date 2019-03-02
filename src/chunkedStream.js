@@ -1,11 +1,11 @@
-const {EventEmitter} = require('events');
-const Injector = require('./ppspp/injector');
+import {EventEmitter} from 'events';
+import Injector from './ppspp/injector';
 
 const DELIMITER = Buffer.from('4c93bf00ae13c37e5df3b7a9cea0413521fe1b08a627d065d7180b9d0738c666', 'hex');
 const DELIMITER_LENGTH = DELIMITER.length;
 const HEADER_INSTANCE_LENGTH = 37;
 
-class ChunkedWriteStream extends EventEmitter {
+export class ChunkedWriteStream extends EventEmitter {
   constructor(injector) {
     super();
     this.injector = injector;
@@ -30,7 +30,7 @@ class ChunkedWriteStream extends EventEmitter {
   }
 }
 
-class ChunkedWriteStreamInjector extends EventEmitter {
+export class ChunkedWriteStreamInjector extends EventEmitter {
   start() {
     const data = Buffer.alloc(3500000 / 8);
     data.fill(255);
@@ -124,7 +124,7 @@ class AbstractChunkedReadStream extends EventEmitter {
   }
 }
 
-class ChunkedFragmentedReadStream extends AbstractChunkedReadStream {
+export class ChunkedFragmentedReadStream extends AbstractChunkedReadStream {
   constructor(swarm) {
     super(swarm);
 
@@ -150,7 +150,7 @@ class ChunkedFragmentedReadStream extends AbstractChunkedReadStream {
   }
 }
 
-class ChunkedReadStream extends AbstractChunkedReadStream {
+export class ChunkedReadStream extends AbstractChunkedReadStream {
   constructor(swarm) {
     super(swarm);
 
@@ -187,10 +187,3 @@ class ChunkedReadStream extends AbstractChunkedReadStream {
     this.chunkBuffer = [];
   }
 }
-
-module.exports = {
-  ChunkedWriteStream,
-  ChunkedWriteStreamInjector,
-  ChunkedFragmentedReadStream,
-  ChunkedReadStream,
-};

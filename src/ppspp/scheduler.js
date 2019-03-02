@@ -1,11 +1,11 @@
-const BitArray = require('../bitarray');
-const Address = require('./address');
-const wfq = require('../wfq');
-const EMA = require('../ema');
-const LEDBAT = require('../ledbat');
-const RingBuffer = require('../RingBuffer');
+import BitArray from '../bitarray';
+import Address from './address';
+import wfq from '../wfq';
+import EMA from '../ema';
+import LEDBAT from '../ledbat';
+import RingBuffer from '../RingBuffer';
 
-class AvailabilityMap {
+export class AvailabilityMap {
   constructor(capacity) {
     this.values = new BitArray(capacity);
   }
@@ -37,7 +37,7 @@ class AvailabilityMap {
   }
 }
 
-class BinRingBuffer extends RingBuffer {
+export class BinRingBuffer extends RingBuffer {
   advanceLastBin(bin) {
     super.advanceLastIndex(bin / 2);
   }
@@ -65,7 +65,7 @@ class BinRingBuffer extends RingBuffer {
   }
 }
 
-class RateMeter {
+export class RateMeter {
   constructor(windowMs, sampleWindowMs = 100) {
     this.firstSampleWindow = Math.floor(Date.now() / sampleWindowMs);
     this.lastSampleWindow = this.firstSampleWindow;
@@ -104,7 +104,7 @@ class RateMeter {
   }
 }
 
-class ChunkRateMeter extends RateMeter {
+export class ChunkRateMeter extends RateMeter {
   constructor(windowMs = 15000) {
     super(windowMs);
     this.lastEndBin = 0;
@@ -120,7 +120,7 @@ class ChunkRateMeter extends RateMeter {
   }
 }
 
-class RequestFlow extends wfq.Flow {
+export class RequestFlow extends wfq.Flow {
   constructor(id) {
     super();
     this.id = id;
@@ -132,7 +132,7 @@ class RequestFlow extends wfq.Flow {
   }
 }
 
-class RequestQueue extends wfq.Queue {
+export class RequestQueue extends wfq.Queue {
   constructor(rate) {
     super(rate);
     this.totalQueueSize = 0;
@@ -170,7 +170,7 @@ class RequestQueue extends wfq.Queue {
   }
 }
 
-class SchedulerChunkState {
+export class SchedulerChunkState {
   constructor(bin) {
     this.bin = bin;
     this.reset();
@@ -187,7 +187,7 @@ class SchedulerChunkState {
   }
 }
 
-class SchedulerChunkRequestMap {
+export class SchedulerChunkRequestMap {
   constructor() {
     this.valueByBin = {};
     this.head = undefined;
@@ -272,7 +272,7 @@ class SchedulerChunkRequestMap {
   }
 }
 
-class SchedulerChunkMap extends BinRingBuffer {
+export class SchedulerChunkMap extends BinRingBuffer {
   createEmptyValue(bin, value) {
     if (value === undefined) {
       return new SchedulerChunkState(bin);
@@ -286,7 +286,7 @@ class SchedulerChunkMap extends BinRingBuffer {
   }
 }
 
-class SchedulerPeerState {
+export class SchedulerPeerState {
   constructor(peer, requestFlow) {
     this.peer = peer;
     this.requestFlow = requestFlow;
@@ -321,7 +321,7 @@ class SchedulerPeerState {
   }
 }
 
-class Scheduler {
+export class Scheduler {
   constructor(chunkSize, clientOptions) {
     const {
       liveDiscardWindow,
@@ -776,17 +776,3 @@ class Scheduler {
     // );
   }
 }
-
-module.exports = {
-  AvailabilityMap,
-  BinRingBuffer,
-  RateMeter,
-  ChunkRateMeter,
-  RequestFlow,
-  RequestQueue,
-  SchedulerChunkState,
-  SchedulerChunkRequestMap,
-  SchedulerChunkMap,
-  SchedulerPeerState,
-  Scheduler,
-};

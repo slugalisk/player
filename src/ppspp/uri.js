@@ -1,6 +1,6 @@
-const URLSafeBase64 = require('urlsafe-base64');
-const SwarmId = require('./swarmid');
-const {ProtocolOptions} = require('./constants');
+import URLSafeBase64 from 'urlsafe-base64';
+import SwarmId from './swarmid';
+import {ProtocolOptions} from './constants';
 
 const protocolOptionToKey = {
   [ProtocolOptions.ContentIntegrityProtectionMethod]: 'x.im',
@@ -12,7 +12,7 @@ const protocolOptionToKey = {
 
 // TODO: dn with stream name
 // TODO: as to m3u8 url?
-class URI {
+export default class URI {
   constructor(swarmId, protocolOptions) {
     this.swarmId = swarmId;
     this.protocolOptions = protocolOptions;
@@ -56,6 +56,3 @@ class URI {
     return new URI(swarmId, protocolOptions);
   }
 }
-
-module.exports = URI;
-

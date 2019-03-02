@@ -1,8 +1,8 @@
-const invert = require('lodash.invert');
+import invert from 'lodash.invert';
 
-const MaxChannelId = 0xffffffff;
+export const MaxChannelId = 0xffffffff;
 
-const ProtocolOptions = {
+export const ProtocolOptions = {
   Version: 0,
   MinimumVersion: 1,
   SwarmIdentifier: 2,
@@ -16,18 +16,18 @@ const ProtocolOptions = {
   EndOption: 255,
 };
 
-const Version = {
+export const Version = {
   RFC7574: 1,
 };
 
-const ContentIntegrityProtectionMethod = {
+export const ContentIntegrityProtectionMethod = {
   None: 0,
   MerkleHashTree: 1,
   SignAll: 2,
   UnifiedMerkleTree: 3,
 };
 
-const MerkleHashTreeFunction = {
+export const MerkleHashTreeFunction = {
   SHA1: 0,
   SHA224: 1,
   SHA256: 2,
@@ -35,14 +35,14 @@ const MerkleHashTreeFunction = {
   SHA512: 4,
 };
 
-const LiveSignatureAlgorithm = {
+export const LiveSignatureAlgorithm = {
   RSASHA1: 5,
   RSASHA256: 8,
   ECDSAP256SHA256: 13,
   ECDSAP384SHA384: 14,
 };
 
-const ChunkAddressingMethod = {
+export const ChunkAddressingMethod = {
   Bin32: 0,
   ByteRange64: 1,
   ChunkRange32: 2,
@@ -50,9 +50,9 @@ const ChunkAddressingMethod = {
   ChunkRange64: 4,
 };
 
-const VariableChunkSize = 0xffffffff;
+export const VariableChunkSize = 0xffffffff;
 
-const MessageTypes = {
+export const MessageTypes = {
   HANDSHAKE: 0,
   DATA: 1,
   ACK: 2,
@@ -81,15 +81,3 @@ const MessageTypes = {
   const names = invert(enumType);
   enumType.name = value => names[value] || 'UNDEFINED';
 });
-
-module.exports = {
-  MaxChannelId,
-  ProtocolOptions,
-  Version,
-  ContentIntegrityProtectionMethod,
-  MerkleHashTreeFunction,
-  LiveSignatureAlgorithm,
-  ChunkAddressingMethod,
-  VariableChunkSize,
-  MessageTypes,
-};

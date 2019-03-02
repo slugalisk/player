@@ -1,6 +1,6 @@
-const {ChunkAddressingMethod} = require('./constants');
+import {ChunkAddressingMethod} from './constants';
 
-class Address {
+export default class Address {
   constructor(bin = 0, treeBounds = Address.binBounds(bin)) {
     this.bin = bin;
     [this.start, this.end] = treeBounds;
@@ -38,5 +38,3 @@ class Address {
     ];
   }
 }
-
-module.exports = Address;

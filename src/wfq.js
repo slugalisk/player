@@ -1,4 +1,4 @@
-class Flow {
+export class Flow {
   constructor() {
     this.lastVirtualFinish = 0;
     this.nextVirtualFinish = Infinity;
@@ -10,7 +10,7 @@ class Flow {
   }
 }
 
-class Queue {
+export class Queue {
   constructor(rate) {
     this.rate = rate;
     this.totalQueueSize = 0;
@@ -87,7 +87,7 @@ class Queue {
   }
 }
 
-module.exports = {
+export default {
   Queue,
   Flow,
 };

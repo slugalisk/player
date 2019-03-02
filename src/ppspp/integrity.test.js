@@ -1,21 +1,21 @@
-const integrity = require('./integrity');
-const crypto = require('crypto');
-const Address = require('./address');
-const SwarmId = require('./swarmid');
-const {
+import * as integrity from './integrity';
+import crypto from 'crypto';
+import Address from './address';
+import SwarmId from './swarmid';
+import {
   createEncoding,
   createChunkAddressFieldType,
   createIntegrityHashFieldType,
   createLiveSignatureFieldType,
-} = require('./encoding');
+} from './encoding';
 
-const {
+import {
   ChunkAddressingMethod,
   ContentIntegrityProtectionMethod,
   MerkleHashTreeFunction,
   MessageTypes,
   LiveSignatureAlgorithm,
-} = require('./constants');
+} from './constants';
 
 it ('verifyChunk', async () => {
   const remoteId = 1;

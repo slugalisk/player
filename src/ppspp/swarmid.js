@@ -1,4 +1,4 @@
-const {LiveSignatureAlgorithm} = require('./constants');
+import {LiveSignatureAlgorithm} from './constants';
 
 const isRsaAlgorithm = liveSignatureAlgorithm => {
   const rsaAlgorithms = [
@@ -8,7 +8,7 @@ const isRsaAlgorithm = liveSignatureAlgorithm => {
   return rsaAlgorithms.includes(liveSignatureAlgorithm);
 };
 
-class SwarmId {
+export default class SwarmId {
   constructor(
     liveSignatureAlgorithm,
     publicKey,
@@ -102,5 +102,3 @@ class SwarmId {
     );
   }
 }
-
-module.exports = SwarmId;

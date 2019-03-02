@@ -1,5 +1,5 @@
-const EMA = require('./ema');
-const RingBuffer = require('./RingBuffer');
+import EMA from './ema';
+import RingBuffer from './RingBuffer';
 
 class DelayBuffer extends RingBuffer {
   constructor(capacity, window) {
@@ -54,7 +54,7 @@ const COEF_K = 4;
 const COEF_ALPHA = 0.125;
 const COEF_BETA = 0.25;
 
-class LEDBAT {
+export default class LEDBAT {
   constructor(target = TARGET, mss = MSS) {
     this.target = target;
     this.mss = mss;
@@ -147,5 +147,3 @@ class LEDBAT {
     return Date.now() - timestamp;
   }
 }
-
-module.exports = LEDBAT;

@@ -1,17 +1,17 @@
-const ppspp = require('./ppspp');
-const dht = require('./dht');
-const {EventEmitter} = require('events');
-const arrayBufferToHex = require('array-buffer-to-hex');
-const createRandomId = require('./utils/createRandomId');
+import * as ppspp from './ppspp';
+import * as dht from './dht';
+import {EventEmitter} from 'events';
+import arrayBufferToHex from 'array-buffer-to-hex';
+import createRandomId from './utils/createRandomId';
 
-class Server {
+export class Server {
   constructor() {
     this.dhtClient = new dht.Client(createRandomId());
     this.ppsppClient = new ppspp.Client();
   }
 }
 
-class ConnManager {
+export class ConnManager {
   constructor(server) {
     this.server = server;
   }
@@ -48,7 +48,7 @@ class ConnManager {
   }
 }
 
-class Conn extends EventEmitter {
+export class Conn extends EventEmitter {
   constructor(remote) {
     super();
     this.remote = remote || new Conn(this);
@@ -75,7 +75,7 @@ class Conn extends EventEmitter {
   close() {}
 }
 
-class Mediator extends EventEmitter {
+export class Mediator extends EventEmitter {
   constructor(conn) {
     super();
     this.conn = conn;
@@ -117,7 +117,7 @@ class Mediator extends EventEmitter {
 Mediator.nextId = 0;
 Mediator.datachannels = {};
 
-class Client extends EventEmitter {
+export class Client extends EventEmitter {
   constructor(mediator) {
     super();
 
@@ -146,7 +146,7 @@ class Client extends EventEmitter {
   }
 }
 
-class ClientDataChannel extends Conn {
+export class ClientDataChannel extends Conn {
   constructor(client, label, remote) {
     super(remote);
 
@@ -156,12 +156,3 @@ class ClientDataChannel extends Conn {
     this.client.on('open', () => this.emit('open'));
   }
 }
-
-module.exports = {
-  Server,
-  ConnManager,
-  Conn,
-  Mediator,
-  Client,
-  ClientDataChannel,
-};

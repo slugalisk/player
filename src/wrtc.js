@@ -1,11 +1,11 @@
-const {EventEmitter} = require('events');
-const {
+import {EventEmitter} from 'events';
+import {
   RTCPeerConnection,
   RTCSessionDescription,
   RTCIceCandidate,
-} = require('wrtc');
+} from 'wrtc';
 
-class ConnManager {
+export class ConnManager {
   constructor(bootstrapAddress) {
     this.bootstrapAddress = bootstrapAddress;
   }
@@ -37,7 +37,7 @@ class ConnManager {
   }
 }
 
-class Mediator extends EventEmitter {
+export class Mediator extends EventEmitter {
   constructor(conn) {
     super();
 
@@ -90,7 +90,7 @@ class Mediator extends EventEmitter {
   }
 }
 
-class Client extends EventEmitter {
+export class Client extends EventEmitter {
   constructor(mediator) {
     super();
 
@@ -177,9 +177,3 @@ class Client extends EventEmitter {
       });
   }
 }
-
-module.exports = {
-  ConnManager,
-  Mediator,
-  Client,
-};

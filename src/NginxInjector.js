@@ -1,14 +1,14 @@
-const {spawn} = require('child_process');
-const express = require('express');
-const bodyParser = require('body-parser');
-const chokidar = require('chokidar');
-const path = require('path');
-const fs = require('fs');
-const Injector = require('./ppspp/injector');
-const {EventEmitter} = require('events');
-const {ChunkedWriteStream} = require('./chunkedStream');
+import {spawn} from 'child_process';
+import express from 'express';
+import bodyParser from 'body-parser';
+import chokidar from 'chokidar';
+import path from 'path';
+import fs from 'fs';
+import Injector from './ppspp/injector';
+import {EventEmitter} from 'events';
+import {ChunkedWriteStream} from './chunkedStream';
 
-class NginxInjector extends EventEmitter {
+export default class NginxInjector extends EventEmitter {
   constructor() {
     super();
     this.injectors = {};
@@ -129,5 +129,3 @@ class NginxInjector extends EventEmitter {
     this.chokidar.close();
   }
 }
-
-module.exports = NginxInjector;

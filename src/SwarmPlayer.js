@@ -2,14 +2,13 @@ import React, {Component} from 'react';
 import muxjs from 'mux.js';
 import {ChunkedFragmentedReadStream} from './chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
+import {Buffer} from 'buffer';
 
 import './SwarmPlayer.css';
 
-const {Buffer} = require('buffer');
-
 const log = e => console.log(e);
 
-class SwarmPlayer extends Component {
+export default class SwarmPlayer extends Component {
   constructor(props) {
     super(props);
     this.video = React.createRef();
@@ -79,5 +78,3 @@ class SwarmPlayer extends Component {
     );
   }
 }
-
-export default SwarmPlayer;

@@ -1,4 +1,4 @@
-const seedrandom = require('seedrandom');
+import seedrandom from 'seedrandom';
 
 const rng = seedrandom('seed');
 
@@ -10,4 +10,4 @@ const createRandomId = () => {
   return id;
 };
 
-module.exports = createRandomId;
+export default createRandomId;

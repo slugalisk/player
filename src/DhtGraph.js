@@ -2,7 +2,7 @@ import React, {useEffect, useReducer, useState} from 'react';
 import {Server, ConnManager} from './loopback';
 import {Client} from './client';
 import arrayBufferToHex from 'array-buffer-to-hex';
-import {ForceGraph3D} from 'react-force-graph';
+import ForceGraph3D from 'react-force-graph-3d';
 import {schemeCategory10} from 'd3-scale-chromatic';
 import {scaleOrdinal} from 'd3-scale';
 
@@ -29,8 +29,9 @@ const reduceGraph = (graph, {type, ...data}) => {
           return source !== data.source || target !== data.target;
         }),
       };
+    default:
+      return graph;
   }
-  return graph;
 };
 
 const App = () => {

@@ -1,4 +1,4 @@
-import chunkedStream from './chunkedStream';
+import * as chunkedStream from './chunkedStream';
 import EventEmitter from 'events';
 
 class Relay extends EventEmitter {

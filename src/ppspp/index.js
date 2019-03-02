@@ -1,35 +1,35 @@
-const {EventEmitter} = require('events');
-const Address = require('./address');
-const SwarmId = require('./swarmid');
-const LEDBAT = require('../ledbat');
-const {
+import {EventEmitter} from 'events';
+import Address from './address';
+import SwarmId from './swarmid';
+import LEDBAT from '../ledbat';
+import {
   createChunkAddressFieldType,
   createLiveSignatureFieldType,
   createIntegrityHashFieldType,
   createEncoding,
-} = require('./encoding');
-const {
+} from './encoding';
+import {
   MaxChannelId,
   ProtocolOptions,
   MessageTypes,
-} = require('./constants');
-const {
+} from './constants';
+import {
   createMerkleHashTreeFunction,
   createLiveSignatureVerifyFunction,
   createLiveSignatureSignFunction,
   createContentIntegrityVerifierFactory,
-} = require('./integrity');
-const {
+} from './integrity';
+import {
   BinRingBuffer,
   Scheduler,
-} = require('./scheduler');
+} from './scheduler';
 
 const genericEncoding = createEncoding();
 
 const BUFFER_SIZE = 1e7;
 const MAX_UPLOAD_RATE = 1e6;
 
-class Swarm extends EventEmitter {
+export class Swarm extends EventEmitter {
   constructor(uri, clientOptions) {
     super();
 
@@ -386,7 +386,7 @@ class SwarmSet extends EventEmitter {
   }
 }
 
-class Client {
+export class Client {
   constructor() {
     this.channels = [];
 
@@ -425,7 +425,7 @@ class Client {
   }
 }
 
-class Channel extends EventEmitter {
+export class Channel extends EventEmitter {
   constructor(conn, swarms) {
     super();
 
@@ -520,10 +520,3 @@ class Channel extends EventEmitter {
     return peer;
   }
 }
-
-module.exports = {
-  Swarm,
-  Client,
-  Channel,
-};
-
