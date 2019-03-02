@@ -8,7 +8,7 @@ const hexToUint8Array = require('./hexToUint8Array');
 
 const SEND_REPLICAS = 2;
 const MAX_HOPS = 10;
-const DEFAULT_PEER_REQUEST_COUNT = 10;
+const DEFAULT_PEER_REQUEST_COUNT = 5;
 const NUMBER_OF_NODES_PER_BUCKET = 15;
 
 // TODO: replace dropped connections
