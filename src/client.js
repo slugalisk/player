@@ -40,10 +40,21 @@ export class Client {
     this.dhtClient.createChannel(id, client.createDataChannel('dht'));
     this.ppsppClient.createChannel(client.createDataChannel('ppspp'));
 
-    this.dhtClient.send(id, 'connect.request', {channelId: sub.id}, () => client.init());
+    const timeout = setTimeout(() => client.close(), 10000);
+
+    const init = () => {
+      clearTimeout(timeout);
+      client.init();
+    };
+
+    this.dhtClient.send(id, 'connect.request', {channelId: sub.id}, init);
   }
 
   handleReceiveConnectRequest({data: {channelId, from}, callback}) {
+    // if (this.dhtClient.channels.count() > 10) {
+    //   return;
+    // }
+
     // console.log('handleReceiveConnectRequest', {channelId, from, callback});
     const id = new hexToUint8Array(from);
     const client = this.connManager.createClient(new dht.SubChannel(this.dhtClient, id, channelId));
@@ -56,6 +67,6 @@ export class Client {
       }
     });
 
-    callback();
+    callback({});
   }
 }

@@ -197,7 +197,8 @@ class Peer {
 
     this.remoteId = handshake.channelId;
 
-    if (this.state === PeerState.CONNECTING) {
+    console.log('received handshake message while in state', this.state);
+    if (this.state !== PeerState.READY) {
       this.sendHandshake();
       this.swarm.scheduler.getRecentChunks().forEach(address => this.sendHave(address));
       this.flush();
@@ -460,14 +461,17 @@ export class Channel extends EventEmitter {
         return;
       }
       if (handshake === undefined || handshake.type !== MessageTypes.HANDSHAKE) {
+        console.log('rejected new peer without handshake');
         return;
       }
       const swarmId = handshake.options.find(({type}) => type === ProtocolOptions.SwarmIdentifier);
       if (swarmId === undefined) {
+        console.log('rejecting new peer with invalid swarm id');
         return;
       }
       const swarm = this.swarms.get(SwarmId.from(swarmId.value));
       if (swarm === undefined) {
+        console.log('rejecting new peer requesting unknown swarm');
         return;
       }
 
@@ -476,11 +480,13 @@ export class Channel extends EventEmitter {
 
     data = new peer.swarm.encoding.Datagram();
     data.read(event.data);
+    // console.log('RECEIVED', data.messages.toArray());
     peer.handleData(data);
   }
 
   send(data) {
     try {
+      // console.log('SENT', data);
       this.conn.send(data.toBuffer());
     } catch (error) {
       console.log('encountered error while sending', error);

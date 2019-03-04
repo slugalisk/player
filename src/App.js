@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
+// import DiagnosticMenu from './DiagnosticMenu';
 import SwarmPlayer from './SwarmPlayer';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
@@ -7,17 +8,21 @@ import {ConnManager} from './wrtc';
 
 import './App.css';
 
-const BOOTSTRAP_ADDRESS = process.env.NODE_ENV === 'development'
-  ? window.location.hostname + ':8080'
-  : window.location.host;
-
 const App = () => {
   const [ppsppClient, setPpsppClient] = useState(null);
   const [swarmUri, setSwarmUri] = useState('');
   const [swarm, setSwarm] = useState(null);
 
   useEffect(() => {
-    const connManager = new ConnManager(BOOTSTRAP_ADDRESS);
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = process.env.NODE_ENV === 'development'
+      ? window.location.hostname + ':8080'
+      : window.location.host;
+    const bootstrapAddress = `${proto}://${host}`;
+
+    console.log({bootstrapAddress});
+
+    const connManager = new ConnManager(bootstrapAddress);
 
     Client.create(connManager).then(({ppsppClient, swarmUri}) => {
       setPpsppClient(ppsppClient);
@@ -26,6 +31,7 @@ const App = () => {
   }, []);
 
   if (swarm) {
+    // return <DiagnosticMenu swarm={swarm} />;
     return <SwarmPlayer swarm={swarm} />;
   }
 

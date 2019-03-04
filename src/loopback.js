@@ -11,6 +11,8 @@ export class Server {
   }
 }
 
+const queue = [];
+
 export class ConnManager {
   constructor(server) {
     this.server = server;
@@ -35,6 +37,12 @@ export class ConnManager {
       }
     });
 
+    queue.push(client);
+    if (queue.length > 11) {
+      queue.shift().close();
+    }
+    // setTimeout(() => client.close(), Math.random() * 30000);
+
     return Promise.resolve({data, conn: conn.remote});
   }
 
@@ -54,13 +62,16 @@ export class Conn extends EventEmitter {
     this.remote = remote || new Conn(this);
     this.remote.remote = this;
     this.onmessage = () => {};
+    this.closed = false;
   }
 
   send(data) {
-    setImmediate(() => {
-      this.remote.emit('message', {data});
-      this.remote.onmessage({data});
-    });
+    if (!this.closed) {
+      setImmediate(() => {
+        this.remote.emit('message', {data});
+        this.remote.onmessage({data});
+      });
+    }
   }
 
   addEventListener(...args) {
@@ -71,8 +82,11 @@ export class Conn extends EventEmitter {
     this.removeListener(...args);
   }
 
-  // TODO: this should do something...?
-  close() {}
+  close() {
+    this.closed = true;
+    this.remote.emit('close');
+    this.emit('close');
+  }
 }
 
 export class Mediator extends EventEmitter {
@@ -123,13 +137,16 @@ export class Client extends EventEmitter {
 
     this.mediator = mediator;
     this.datachannels = {};
+    this.conns = [];
 
     mediator.on('datachannel', this.handleDataChannel.bind(this));
     mediator.once('open', this.handleOpen.bind(this));
   }
 
   handleDataChannel(label, conn) {
-    this.emit('datachannel', {label, channel: new ClientDataChannel(this, label, conn)});
+    const channel = new ClientDataChannel(this, label, conn);
+    this.conns.push(channel);
+    this.emit('datachannel', {label, channel});
   }
 
   handleOpen() {
@@ -137,12 +154,19 @@ export class Client extends EventEmitter {
   }
 
   createDataChannel(label) {
-    this.datachannels[label] = new ClientDataChannel(this, label);
-    return this.datachannels[label];
+    const channel = new ClientDataChannel(this, label);
+    this.datachannels[label] = channel;
+    this.conns.push(channel);
+    return channel;
   }
 
   init() {
     this.mediator.sendConnection(this.datachannels);
+  }
+
+  close() {
+    this.conns.forEach(conn => conn.close());
+    this.emit('close');
   }
 }
 
@@ -152,7 +176,11 @@ export class ClientDataChannel extends Conn {
 
     this.client = client;
     this.label = label;
+    this.open = false;
 
-    this.client.on('open', () => this.emit('open'));
+    this.client.on('open', () => {
+      this.emit('open');
+      this.open = true;
+    });
   }
 }

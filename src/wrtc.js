@@ -12,8 +12,7 @@ export class ConnManager {
 
   bootstrap() {
     return new Promise((resolve, reject) => {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const conn = new WebSocket(`${protocol}://${this.bootstrapAddress}`);
+      const conn = new WebSocket(this.bootstrapAddress);
       conn.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'bootstrap') {
@@ -163,6 +162,7 @@ export class Client extends EventEmitter {
 
   resolveWaitingChannel() {
     if (-- this.waitingChannels === 0) {
+      console.log('wrtc client opened');
       this.emit('open');
     }
   }
@@ -175,5 +175,11 @@ export class Client extends EventEmitter {
         this.peerConn.setLocalDescription(offer);
         this.mediator.sendOffer(offer);
       });
+  }
+
+  close() {
+    console.log('wrtc client closed');
+    this.peerConn.close();
+    this.emit('close');
   }
 }

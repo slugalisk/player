@@ -1,7 +1,8 @@
 require('dotenv').config();
 
-import http from 'http';
+import https from 'https';
 import express from 'express';
+import fs from 'fs';
 import ws from 'ws';
 import hilbert from 'hilbert';
 import ip2location from 'ip2location-nodejs';
@@ -14,7 +15,7 @@ import * as dht from './dht';
 import * as ppspp from './ppspp';
 import * as wrtc from './wrtc';
 
-ip2location.IP2Location_init(path.join(__dirname, '../vendor/IP2LOCATION-LITE-DB5.BIN'));
+ip2location.IP2Location_init(path.join(__dirname, '..', 'vendor', 'IP2LOCATION-LITE-DB5.BIN'));
 
 const args = require('minimist')(process.argv.slice(2));
 const port = args.p || 8080;
@@ -24,7 +25,10 @@ let swarmUri = '';
 const app = express();
 app.use(express.static('public'));
 
-const server = http.createServer(app);
+const server = https.createServer({
+  key: fs.readFileSync(path.join(__dirname, '..', 'tls', 'key.pem')),
+  cert: fs.readFileSync(path.join(__dirname, '..', 'tls', 'certificate.pem')),
+}, app);
 
 server.listen(port, function(err) {
   const address = server.address();

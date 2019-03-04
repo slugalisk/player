@@ -379,7 +379,7 @@
   dependencies:
     "@babel/helper-plugin-utils" "^7.0.0"
 
-"@babel/plugin-syntax-dynamic-import@7.2.0", "@babel/plugin-syntax-dynamic-import@^7.2.0":
+"@babel/plugin-syntax-dynamic-import@7.2.0":
   version "7.2.0"
   resolved "https://registry.yarnpkg.com/@babel/plugin-syntax-dynamic-import/-/plugin-syntax-dynamic-import-7.2.0.tgz#69c159ffaf4998122161ad8ebc5e6d1f55df8612"
   integrity sha512-mVxuJ0YroI/h/tbFTPGZR8cv6ai+STMKNBq0f8hFxsxWjl94qqhsb+wXbpNMDPU3cfR1TIsVFzU3nXyZMqyK4w==
@@ -1719,7 +1719,7 @@ babel-messages@^6.23.0:
   dependencies:
     babel-runtime "^6.22.0"
 
-babel-plugin-dynamic-import-node@2.2.0, babel-plugin-dynamic-import-node@^2.2.0:
+babel-plugin-dynamic-import-node@2.2.0:
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/babel-plugin-dynamic-import-node/-/babel-plugin-dynamic-import-node-2.2.0.tgz#c0adfb07d95f4a4495e9aaac6ec386c4d7c2524e"
   integrity sha512-fP899ELUnTaBcIzmrW7nniyqqdYWrWuJUyPWHxFa/c7r7hS6KC8FscNfLlBNIoPSc55kYMGEEKjPjJGCLbE1qA==
@@ -10101,6 +10101,11 @@ three-render-objects@^1.4.1:
     three-orbit-controls "^82.1.0"
     three-trackballcontrols "^0.0.7"
 
+three-spritetext@^1.0.6:
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/three-spritetext/-/three-spritetext-1.0.6.tgz#917cb460ac5fec8d4618f8712f7718da1df1ba87"
+  integrity sha512-qgVBD3ss14g+2eInq4kGDm3ztMR+XtYuralWAi17ZYo4WHGLlRABcThdjvBjlRLog3Xv/sCzPomCBYaZpsVmCg==
+
 three-trackballcontrols@^0.0.7:
   version "0.0.7"
   resolved "https://registry.yarnpkg.com/three-trackballcontrols/-/three-trackballcontrols-0.0.7.tgz#42cae1f6856d5f889eaae3a0e2fca9d214793e91"
@@ -10110,6 +10115,11 @@ three@^0.101.1:
   version "0.101.1"
   resolved "https://registry.yarnpkg.com/three/-/three-0.101.1.tgz#e7681ef52f4e572cb84f307f16f540c457030ec6"
   integrity sha512-8ufimUVmRLtH+BTpEIbDjdGEKQOVWLMLgGynaKin1KbYTE136ZNOepJ8EgByi0tN43dQ7B1YrKLCJgXGy4bLmw==
+
+three@^0.102.0:
+  version "0.102.0"
+  resolved "https://registry.yarnpkg.com/three/-/three-0.102.0.tgz#b26a7212d95f1ea043ab94598d55973ebe110cbb"
+  integrity sha512-ZszcMfos5uPugmf7svZshEIh/oncVAtnxpPqrFFj6hrh6SMyQ1qQBCY8QE0Lah1C5gXTx837rn2ikt0VLGqQ9g==
 
 throat@^4.0.0:
   version "4.1.0"

@@ -160,7 +160,7 @@ class PeerStateTable extends Component {
     const rows = values.map(({key, value}) => (
       <tr key={key}>
         <td className="diagnostic_table__key_cell">{key}</td>
-        <td>{value}</td>
+        <td>{String(value)}</td>
       </tr>
     ));
 
