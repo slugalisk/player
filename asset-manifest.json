@@ -1,13 +1,13 @@
 {
   "main.css": "/player/static/css/main.52ca2fe6.chunk.css",
-  "main.js": "/player/static/js/main.ea15d732.chunk.js",
-  "main.js.map": "/player/static/js/main.ea15d732.chunk.js.map",
+  "main.js": "/player/static/js/main.79c8dd50.chunk.js",
+  "main.js.map": "/player/static/js/main.79c8dd50.chunk.js.map",
   "runtime~main.js": "/player/static/js/runtime~main.ee527bd8.js",
   "runtime~main.js.map": "/player/static/js/runtime~main.ee527bd8.js.map",
-  "static/js/2.7c8bd71e.chunk.js": "/player/static/js/2.7c8bd71e.chunk.js",
-  "static/js/2.7c8bd71e.chunk.js.map": "/player/static/js/2.7c8bd71e.chunk.js.map",
+  "static/js/2.c56a15d0.chunk.js": "/player/static/js/2.c56a15d0.chunk.js",
+  "static/js/2.c56a15d0.chunk.js.map": "/player/static/js/2.c56a15d0.chunk.js.map",
   "index.html": "/player/index.html",
-  "precache-manifest.17a15f63aec713cc5867746e314f3ead.js": "/player/precache-manifest.17a15f63aec713cc5867746e314f3ead.js",
+  "precache-manifest.7ea2fea50c0061af09eb50a96231e481.js": "/player/precache-manifest.7ea2fea50c0061af09eb50a96231e481.js",
   "service-worker.js": "/player/service-worker.js",
   "static/css/main.52ca2fe6.chunk.css.map": "/player/static/css/main.52ca2fe6.chunk.css.map",
   "static/media/nodessl.node": "/player/static/media/nodessl.de17361c.node"
