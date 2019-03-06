@@ -5,6 +5,10 @@ import {
   RTCIceCandidate,
 } from 'wrtc';
 
+const WebSocket = require('detect-node')
+  ? require('ws')
+  : window.WebSocket;
+
 export class ConnManager {
   constructor(bootstrapAddress) {
     this.bootstrapAddress = bootstrapAddress;

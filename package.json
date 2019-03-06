@@ -38,7 +38,8 @@
     "three-spritetext": "^1.0.6",
     "urlsafe-base64": "^1.0.0",
     "uuid": "^3.3.2",
-    "wrtc": "^0.3.5"
+    "wrtc": "^0.3.5",
+    "ws": "^6.2.0"
   },
   "scripts": {
     "start": "HTTPS=true NODE_ENV=development react-scripts start",

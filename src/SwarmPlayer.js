@@ -21,6 +21,8 @@ export default class SwarmPlayer extends Component {
     this.video.current.src = URL.createObjectURL(mediaSource);
 
     mediaSource.addEventListener('sourceopen', () => this.handleSourceOpen(mediaSource));
+
+    this.video.current.play();
   }
 
   handleSourceOpen = (mediaSource) => {
@@ -70,7 +72,6 @@ export default class SwarmPlayer extends Component {
       <React.Fragment>
         <DiagnosticMenu swarm={this.props.swarm} />
         <video
-          controls
           className="swarm-player-video"
           ref={this.video}
         />

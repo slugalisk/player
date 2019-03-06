@@ -97,22 +97,17 @@ export class Client extends EventEmitter {
     // console.log('ping', channels, newChannel);
     const PING_TIMEOUT = 10000;
 
-    const validateChannel = channel => {
-      const readyState = idx(channel, _ => _.conn.readyState);
-      return readyState === 1 || readyState === 'open';
-    };
-
     channels.forEach(channel => {
       const {id} = channel;
 
-      if (validateChannel(channel)) {
+      if (channel.isOpen()) {
         this.addChannel(channel);
         return;
       }
 
       setTimeout(() => {
         const channel = this.getChannel(id);
-        if (validateChannel(channel)) {
+        if (channel && channel.isOpen()) {
           this.addChannel(channel);
           return;
         }
@@ -357,7 +352,7 @@ export class Client extends EventEmitter {
 
   sendRaw(to, message, trace=[]) {
     let closest = this.allChannels.closest(to)
-      .filter(({conn}) => conn != null)
+      .filter(channel => channel.isOpen())
       .filter(({idHex}) => trace.indexOf(idHex) === -1)
       .slice(0, SEND_REPLICAS);
 
@@ -365,7 +360,7 @@ export class Client extends EventEmitter {
     if (knownRoute) {
       const channel = this.getChannel(knownRoute);
       // const channel = this.allChannels.get(knownRoute);
-      if (channel != null && channel.conn != null) {
+      if (channel != null && channel.isOpen()) {
         closest.push(channel);
       }
     }
@@ -400,6 +395,11 @@ export class Channel {
     this.conn = conn;
 
     // console.log('channel', this);
+  }
+
+  isOpen() {
+    const readyState = idx(this, _ => _.conn.readyState);
+    return readyState === 1 || readyState === 'open';
   }
 }
 
