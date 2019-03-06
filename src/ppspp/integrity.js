@@ -10,7 +10,7 @@ import {
   LiveSignatureAlgorithm,
 } from './constants';
 
-const crypto = typeof window === 'undefined'
+const crypto = require('detect-node')
   ? require('./webcrypto')
   : require('./crypto');
 
@@ -217,7 +217,7 @@ export const createContentIntegrityVerifierFactory = (
       return this.rootAddress.getChunkCount();
     }
 
-    getConstituentHashBins({bin}) {
+    *getConstituentHashBins({bin}) {
       if (!this.rootAddress.containsBin(bin)) {
         throw new Error('bin out of range');
       }
@@ -233,34 +233,34 @@ export const createContentIntegrityVerifierFactory = (
       while (bfsIndex !== 0) {
         const branch = (bfsIndex & 1) === 1 ? 1 : -1;
 
-        bins.push({
+        yield {
           isRoot: false,
           branch,
           bin: parent + start,
           bfsIndex,
           siblingBin: parent + branch * stride + start,
           siblingBfsIndex: bfsIndex + branch,
-        });
+        };
 
         bfsIndex = Math.floor((bfsIndex - 1) / 2);
         parent += branch * stride / 2;
         stride *= 2;
       }
 
-      bins.push({
+      yield {
         isRoot: true,
         branch: 0,
         bin: parent + start,
         bfsIndex: 0,
         siblingBin: parent + start,
         siblingBfsIndex: 0,
-      });
+      };
 
       return bins;
     }
 
     getConstituentSignatures(address) {
-      return this.getConstituentHashBins(address).map(({
+      return Array.from(this.getConstituentHashBins(address)).map(({
         siblingBin,
         siblingBfsIndex,
       }) => ({
@@ -310,56 +310,48 @@ export const createContentIntegrityVerifierFactory = (
     }
 
     setHashSignature({bin}, hash) {
-      const signature = new SignedSignature(this.signatures[bin], hash);
-      this.signatures[bin] = signature;
+      this.signatures[bin] = new SignedSignature(this.signatures[bin], hash);
     }
 
     verifyChunk(address, value) {
       const signatures = [];
       let hashResult = merkleHashTreeFunction(value);
 
-      this.hashTree.getConstituentHashBins(address).some(({
-        isRoot,
-        branch,
-        bfsIndex,
-        siblingBin,
-        siblingBfsIndex,
-      }) => {
-        let siblingSignature = this.hashTree.signatures[siblingBfsIndex];
+      for (let bin of this.hashTree.getConstituentHashBins(address)) {
+        let siblingSignature = this.hashTree.signatures[bin.siblingBfsIndex];
         if (siblingSignature === undefined) {
-          siblingSignature = this.signatures[siblingBin];
+          siblingSignature = this.signatures[bin.siblingBin];
           signatures.push({
-            index: siblingBfsIndex,
+            index: bin.siblingBfsIndex,
             signature: siblingSignature,
           });
         }
 
         // if the current branch has already been verified short circuit
-        const verifiedSignature = this.hashTree.signatures[bfsIndex];
+        const verifiedSignature = this.hashTree.signatures[bin.bfsIndex];
         if (verifiedSignature !== undefined) {
           hashResult = hashResult.then(hash => verifiedSignature.compare(hash));
-          return true;
+          break;
         }
 
-        // verify the generated root hash using the one supplied to the mutator
-        if (isRoot) {
+        // verify the generated root hash using the one supplied to the verifier
+        if (bin.isRoot) {
           hashResult = hashResult.then(hash => siblingSignature.compare(hash));
-          return true;
+          break;
         }
 
         // chain generating the next parent hash
         hashResult = hashResult.then(hash => {
           signatures.push({
-            index: bfsIndex,
+            index: bin.bfsIndex,
             signature: new Signature(hash),
           });
 
           const siblingHash = siblingSignature.getHash();
-          const siblings = branch === 1 ? [hash, siblingHash] : [siblingHash, hash];
+          const siblings = bin.branch === 1 ? [hash, siblingHash] : [siblingHash, hash];
           return merkleHashTreeFunction(...siblings);
         });
-        return false;
-      });
+      }
 
       return hashResult.then(() => {
         signatures.forEach(({index, signature}) => {

@@ -1,39 +1,68 @@
 require('dotenv').config();
 
+import http from 'http';
 import https from 'https';
 import express from 'express';
 import fs from 'fs';
 import ws from 'ws';
 import hilbert from 'hilbert';
 import ip2location from 'ip2location-nodejs';
-import path from 'path';
 import crypto from 'crypto';
 import arrayBufferToHex from 'array-buffer-to-hex';
 import NginxInjector from './NginxInjector';
-// import {ChunkedWriteStreamInjector} from './chunkedStream';
+import {ChunkedWriteStreamInjector} from './chunkedStream';
 import * as dht from './dht';
 import * as ppspp from './ppspp';
 import * as wrtc from './wrtc';
 
-ip2location.IP2Location_init(path.join(__dirname, '..', 'vendor', 'IP2LOCATION-LITE-DB5.BIN'));
-
 const args = require('minimist')(process.argv.slice(2));
-const port = args.p || 8080;
+const port = args.p || process.env.PORT || 8080;
 
 let swarmUri = '';
 
 const app = express();
-app.use(express.static('public'));
+app.use(express.static(process.env.STATIC_PATH || 'public'));
 
-const server = https.createServer({
-  key: fs.readFileSync(path.join(__dirname, '..', 'tls', 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, '..', 'tls', 'certificate.pem')),
+const createHttpsServer = app => https.createServer({
+  key: fs.readFileSync(process.env.HTTPS_KEY_PATH),
+  cert: fs.readFileSync(process.env.HTTPS_CERT_PATH),
 }, app);
+
+let server = process.env.HTTPS_ENABLE === 'true'
+  ? createHttpsServer(app)
+  : http.createServer(app);
 
 server.listen(port, function(err) {
   const address = server.address();
   console.log('Server running at ' + address.port);
 });
+
+const generateRandomId = () => {
+  const id = Buffer.alloc(16);
+  crypto.randomFillSync(id);
+
+  return new Uint8Array(id);
+};
+
+const generateIdFromGeo = (addr) => {
+  const location = ip2location.IP2Location_get_all(addr);
+  const prefix = (new hilbert.Hilbert2d(1)).xy2d(
+    Math.round(((parseFloat(location.longitude) || 0) + 180) * 100),
+    Math.round(((parseFloat(location.latitude) || 0) + 90) * 100)
+  );
+
+  const id = Buffer.alloc(16);
+  id.writeUInt32BE(prefix);
+  crypto.randomFillSync(id, 4);
+
+  return new Uint8Array(id);
+};
+
+let generateId = generateRandomId;
+if (process.env.GEOIP_DB_PATH) {
+  ip2location.IP2Location_init(process.env.GEOIP_DB_PATH);
+  generateId = generateIdFromGeo;
+}
 
 const serverIp = process.env.EXTERNAL_IP || server.address().address;
 const dhtClient = new dht.Client(generateId(serverIp));
@@ -63,22 +92,12 @@ wss.on('connection', function(conn, req) {
   }));
 });
 
-function generateId(addr) {
-  const location = ip2location.IP2Location_get_all(addr);
-  const prefix = (new hilbert.Hilbert2d(1)).xy2d(
-    Math.round(((parseFloat(location.longitude) || 0) + 180) * 100),
-    Math.round(((parseFloat(location.latitude) || 0) + 90) * 100)
-  );
-
-  const id = Buffer.alloc(16);
-  id.writeUInt32BE(prefix);
-  crypto.randomFillSync(id, 4);
-
-  return new Uint8Array(id);
-}
-
-const injector = new NginxInjector();
-// const injector = new ChunkedWriteStreamInjector();
+const injectorTypes = {
+  nginx: NginxInjector,
+  noise: ChunkedWriteStreamInjector,
+};
+const Injector = injectorTypes[process.env.INJECTOR || 'noise'];
+const injector = new Injector();
 injector.start();
 
 injector.on('publish', ({swarm}) => {

@@ -26,7 +26,7 @@ export class ConnManager {
       bootstrapId: arrayBufferToHex(this.server.dhtClient.id),
       id: arrayBufferToHex(id),
     };
-    const conn = new Conn();
+    const conn = Conn.open();
     const client = this.createClient(conn);
 
     client.on('datachannel', ({channel}) => {
@@ -59,14 +59,17 @@ export class ConnManager {
 export class Conn extends EventEmitter {
   constructor(remote) {
     super();
+
     this.remote = remote || new Conn(this);
     this.remote.remote = this;
+
+    this.readyState = this.remote.readyState || Conn.ReadyStates.CONNECTING;
+
     this.onmessage = () => {};
-    this.closed = false;
   }
 
   send(data) {
-    if (!this.closed) {
+    if (this.readyState === Conn.ReadyStates.OPEN) {
       setImmediate(() => {
         this.remote.emit('message', {data});
         this.remote.onmessage({data});
@@ -82,12 +85,35 @@ export class Conn extends EventEmitter {
     this.removeListener(...args);
   }
 
+  static open() {
+    const conn = new Conn();
+    conn.open();
+    conn.remote.open();
+    return conn;
+  }
+
+  open() {
+    this.readyState = Conn.ReadyStates.OPEN;
+    this.remote.readyState = Conn.ReadyStates.OPEN;
+    this.emit('open');
+  }
+
   close() {
-    this.closed = true;
+    this.readyState = Conn.ReadyStates.CLOSING;
+    this.remote.readyState = Conn.ReadyStates.CLOSING;
     this.remote.emit('close');
     this.emit('close');
+    this.readyState = Conn.ReadyStates.CLOSED;
+    this.remote.readyState = Conn.ReadyStates.CLOSED;
   }
 }
+
+Conn.ReadyStates = {
+  CONNECTING: 'connecting',
+  OPEN: 'open',
+  CLOSING: 'closing',
+  CLOSED: 'closed',
+};
 
 export class Mediator extends EventEmitter {
   constructor(conn) {
@@ -150,7 +176,10 @@ export class Client extends EventEmitter {
   }
 
   handleOpen() {
-    setImmediate(() => this.emit('open'));
+    setImmediate(() => {
+      this.conns.forEach(conn => conn.open());
+      this.emit('open');
+    });
   }
 
   createDataChannel(label) {
@@ -176,11 +205,5 @@ export class ClientDataChannel extends Conn {
 
     this.client = client;
     this.label = label;
-    this.open = false;
-
-    this.client.on('open', () => {
-      this.emit('open');
-      this.open = true;
-    });
   }
 }

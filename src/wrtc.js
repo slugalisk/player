@@ -28,7 +28,8 @@ export class ConnManager {
     const mediator = new Mediator(conn);
     const client = new Client(mediator);
 
-    // TODO: retry?
+    // firefox seems to continue generating ice messages after the datachannel
+    // has opened...
     mediator.once('error', () => conn.close());
     client.once('open', () => conn.close());
 
@@ -46,6 +47,7 @@ export class Mediator extends EventEmitter {
 
   handleMessage(event) {
     const data = JSON.parse(event.data);
+    // console.log('mediator message', data);
 
     switch (data.type) {
       case 'offer':
@@ -81,7 +83,10 @@ export class Mediator extends EventEmitter {
 
   send(event) {
     if (this.conn.readyState !== 1) {
-      this.emit('error', new Error('connection in invalid state'));
+      console.log('mediator tried to send after closing its connection');
+      // console.log('send error', this.conn);
+      // console.trace();
+      // this.emit('error', new Error('connection in invalid state'));
       return;
     }
 
@@ -138,8 +143,17 @@ export class Client extends EventEmitter {
   }
 
   handleDataChannel(event) {
+    event.channel.addEventListener('close', e => console.log('< begin close event handlers'));
+    event.channel.binaryType = 'arraybuffer';
+
     this.waitingChannels ++;
     event.channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
+
+    // console.log('< received data channel', event);
+    event.channel.addEventListener('error', e => console.log('< data channel emitted error', e));
+    event.channel.addEventListener('open', e => console.log('< data channel opened', e));
+    event.channel.addEventListener('bufferedamountlow', e => console.log('< data channel bufferamountlow', e));
+    event.channel.addEventListener('close', e => console.log('< data channel closed', e));
 
     this.emit('datachannel', event);
   }
@@ -152,17 +166,23 @@ export class Client extends EventEmitter {
     };
 
     const channel = this.peerConn.createDataChannel(label, options);
+    channel.addEventListener('close', e => console.log('> begin close event handlers'));
     channel.binaryType = 'arraybuffer';
 
     this.waitingChannels ++;
     channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
+
+    // console.log('> received data channel', {channel});
+    channel.addEventListener('error', e => console.log('> data channel emitted error', e));
+    channel.addEventListener('open', e => console.log('> data channel opened', e));
+    channel.addEventListener('bufferedamountlow', e => console.log('> data channel bufferedamountlow', e));
+    channel.addEventListener('close', e => console.log('> data channel closed', e));
 
     return channel;
   }
 
   resolveWaitingChannel() {
     if (-- this.waitingChannels === 0) {
-      console.log('wrtc client opened');
       this.emit('open');
     }
   }
@@ -178,7 +198,8 @@ export class Client extends EventEmitter {
   }
 
   close() {
-    console.log('wrtc client closed');
+    // console.log('wrtc client closed');
+    // console.trace();
     this.peerConn.close();
     this.emit('close');
   }

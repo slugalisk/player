@@ -345,7 +345,13 @@ class Peer {
     }
 
     const {encoding} = this.swarm;
-    this.channel.send(new encoding.Datagram(this.remoteId, this.sendBuffer));
+    try {
+      this.channel.send(new encoding.Datagram(this.remoteId, this.sendBuffer));
+    } catch (e) {
+      console.log('error sending');
+      console.log(this.channel);
+      throw e;
+    }
     this.sendBuffer = [];
   }
 }
@@ -445,7 +451,12 @@ export class Channel extends EventEmitter {
 
   handleMessage(event) {
     let data = new genericEncoding.Datagram();
-    data.read(event.data);
+    try {
+      data.read(event.data);
+    } catch (e) {
+      console.log(event.data);
+      throw e;
+    }
 
     let peer = this.peers[data.channelId];
     if (peer === undefined) {
@@ -486,7 +497,7 @@ export class Channel extends EventEmitter {
 
   send(data) {
     try {
-      // console.log('SENT', data);
+      // console.log('SENT', data.toBuffer().length, data);
       this.conn.send(data.toBuffer());
     } catch (error) {
       console.log('encountered error while sending', error);

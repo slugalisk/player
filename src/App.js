@@ -1,14 +1,15 @@
 import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
-// import DiagnosticMenu from './DiagnosticMenu';
-import SwarmPlayer from './SwarmPlayer';
+import DiagnosticMenu from './DiagnosticMenu';
+// import SwarmPlayer from './SwarmPlayer';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
-// import {ChunkedReadStream} from './chunkedStream';
+import {ChunkedReadStream} from './chunkedStream';
+// import qs from 'qs';
 
 import './App.css';
 
-const App = () => {
+const App = props => {
   const [ppsppClient, setPpsppClient] = useState(null);
   const [swarmUri, setSwarmUri] = useState('');
   const [swarm, setSwarm] = useState(null);
@@ -30,27 +31,37 @@ const App = () => {
     });
   }, []);
 
-  if (swarm) {
-    // return <DiagnosticMenu swarm={swarm} />;
-    return <SwarmPlayer swarm={swarm} />;
-  }
-
-  const onJoinSubmit = e => {
-    e.preventDefault();
-
+  const joinSwarm = () => {
     console.log(swarmUri);
     const uri = URI.parse(swarmUri);
     console.log('joining', uri);
 
     const swarm = ppsppClient.joinSwarm(uri);
-    // const stream = new ChunkedReadStream(swarm);
-    // stream.on('data', d => console.log(`received ${d.length} bytes`));
+    const stream = new ChunkedReadStream(swarm);
+    stream.on('data', d => console.log(`received ${d.length} bytes`));
     setSwarm(swarm);
+  };
+
+  // useEffect(() => {
+  //   const query = qs.parse(props.location.search, {ignoreQueryPrefix: true});
+  //   if (query.autoplay && swarmUri) {
+  //     joinSwarm();
+  //   }
+  // }, [swarmUri]);
+
+  const onJoinSubmit = e => {
+    e.preventDefault();
+    joinSwarm();
   };
 
   const onInputChange = e => {
     setSwarmUri(e.target.value);
   };
+
+  if (swarm) {
+    return <DiagnosticMenu swarm={swarm} />;
+    // return <SwarmPlayer swarm={swarm} />;
+  }
 
   return (
     <React.Fragment>
