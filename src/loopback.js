@@ -5,13 +5,12 @@ import arrayBufferToHex from 'array-buffer-to-hex';
 import createRandomId from './utils/createRandomId';
 
 export class Server {
-  constructor() {
-    this.dhtClient = new dht.Client(createRandomId());
-    this.ppsppClient = new ppspp.Client();
+  constructor(props = {}) {
+    this.queue = [];
+    this.dhtClient = props.dhtClient || new dht.Client(createRandomId());
+    this.ppsppClient = props.ppsppClient || new ppspp.Client();
   }
 }
-
-const queue = [];
 
 export class ConnManager {
   constructor(server) {
@@ -37,9 +36,9 @@ export class ConnManager {
       }
     });
 
-    queue.push(client);
-    if (queue.length > 11) {
-      queue.shift().close();
+    this.server.queue.push(client);
+    if (this.server.queue.length > 6) {
+      this.server.queue.shift().close();
     }
     // setTimeout(() => client.close(), Math.random() * 30000);
 
@@ -101,10 +100,15 @@ export class Conn extends EventEmitter {
   close() {
     this.readyState = Conn.ReadyStates.CLOSING;
     this.remote.readyState = Conn.ReadyStates.CLOSING;
+
     this.remote.emit('close');
     this.emit('close');
+
     this.readyState = Conn.ReadyStates.CLOSED;
     this.remote.readyState = Conn.ReadyStates.CLOSED;
+
+    this.removeAllListeners();
+    this.remote.removeAllListeners();
   }
 }
 
@@ -196,6 +200,7 @@ export class Client extends EventEmitter {
   close() {
     this.conns.forEach(conn => conn.close());
     this.emit('close');
+    this.removeAllListeners();
   }
 }
 

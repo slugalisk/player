@@ -55,10 +55,12 @@ export class Client extends EventEmitter {
     this.startPeerRequests();
   }
 
+  // TODO: this is leaking connections
   close() {
     this.stopPeerRequests();
-    this.channels.toArray().forEach(({id}) => this.removeChannel(id));
+    this.allChannels.toArray().forEach(({conn}) => conn && conn.close());
     this.emit('close');
+    this.removeAllListeners();
   }
 
   startPeerRequests() {
@@ -126,7 +128,7 @@ export class Client extends EventEmitter {
   removeChannel(id) {
     this.channels.remove(id);
     this.allChannels.remove(id);
-    delete this.channelMap[arrayBufferToHex(id)];
+    // delete this.channelMap[arrayBufferToHex(id)];
   }
 
   getChannel(id) {
@@ -158,18 +160,22 @@ export class Client extends EventEmitter {
   }
 
   createChannel(id, conn) {
+    const idHex = arrayBufferToHex(id);
     const channel = new Channel(id, conn);
 
-    this.channelMap[arrayBufferToHex(id)] = channel;
+    const oldChannel = this.channelMap[idHex];
+    if (oldChannel && oldChannel.conn) {
+      // console.warn('replacing open channel...');
+      oldChannel.conn.close();
+    }
+    this.channelMap[idHex] = channel;
 
     const messages = [];
     const bufferMessages = event => messages.push(event);
     const handleMessage = this.handleMessage.bind(this, channel);
 
-    // let requestPeersIvl = setInterval(() => this.sendPeerRequest(id), 30000);
-
     const handleOpen = () => {
-      // console.log('opened', arrayBufferToHex(channel.id));
+      // console.log('saw open', idHex);
       this.addChannel(channel);
 
       conn.removeEventListener('message', bufferMessages);
@@ -177,16 +183,18 @@ export class Client extends EventEmitter {
       messages.forEach(handleMessage);
 
       this.sendPeerRequest(id);
-      setTimeout(() => this.sendPeerRequest(id), 1000);
     };
 
     const handleClose = () => {
-      // clearInterval(requestPeersIvl);
+      // console.log('saw close', idHex);
       conn.removeEventListener('message', bufferMessages);
       conn.removeEventListener('message', handleMessage);
       conn.removeEventListener('open', handleOpen);
-      conn.removeEventListener('close', handleClose);
-      this.handleClose(channel);
+
+      if (this.channelMap[idHex] === channel) {
+        this.removeChannel(id);
+        delete this.channelMap[idHex];
+      }
     };
 
     conn.addEventListener('message', bufferMessages);
@@ -251,13 +259,6 @@ export class Client extends EventEmitter {
     data.hops ++;
 
     this.sendRaw(to, JSON.stringify(data), data.trace);
-  }
-
-  handleClose({id}) {
-    // console.warn('handleClose', arrayBufferToHex(id));
-    // console.trace();
-    this.removeChannel(id);
-    delete this.channelMap[arrayBufferToHex(id)];
   }
 
   sendPing(to, callback=()=>{}) {

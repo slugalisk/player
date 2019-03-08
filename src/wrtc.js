@@ -154,10 +154,10 @@ export class Client extends EventEmitter {
     event.channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
 
     // console.log('< received data channel', event);
-    event.channel.addEventListener('error', e => console.log('< data channel emitted error', e));
-    event.channel.addEventListener('open', e => console.log('< data channel opened', e));
-    event.channel.addEventListener('bufferedamountlow', e => console.log('< data channel bufferamountlow', e));
-    event.channel.addEventListener('close', e => console.log('< data channel closed', e));
+    // event.channel.addEventListener('error', e => console.log('< data channel emitted error', e));
+    // event.channel.addEventListener('open', e => console.log('< data channel opened', e));
+    // event.channel.addEventListener('bufferedamountlow', e => console.log('< data channel bufferamountlow', e));
+    // event.channel.addEventListener('close', e => console.log('< data channel closed', e));
 
     this.emit('datachannel', event);
   }
@@ -177,10 +177,10 @@ export class Client extends EventEmitter {
     channel.addEventListener('open', this.resolveWaitingChannel.bind(this), {once: true});
 
     // console.log('> received data channel', {channel});
-    channel.addEventListener('error', e => console.log('> data channel emitted error', e));
-    channel.addEventListener('open', e => console.log('> data channel opened', e));
-    channel.addEventListener('bufferedamountlow', e => console.log('> data channel bufferedamountlow', e));
-    channel.addEventListener('close', e => console.log('> data channel closed', e));
+    // channel.addEventListener('error', e => console.log('> data channel emitted error', e));
+    // channel.addEventListener('open', e => console.log('> data channel opened', e));
+    // channel.addEventListener('bufferedamountlow', e => console.log('> data channel bufferedamountlow', e));
+    // channel.addEventListener('close', e => console.log('> data channel closed', e));
 
     return channel;
   }
