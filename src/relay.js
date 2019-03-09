@@ -15,7 +15,7 @@ const table = contrib.table({
   selectedFg: 'white',
   selectedBg: 'blue',
   interactive: true,
-  label: 'Active Processes',
+  label: 'active connections',
   width: '30%',
   height: '30%',
   border: {

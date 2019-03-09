@@ -205,7 +205,14 @@ export class Client extends EventEmitter {
   handleMessage(channel, event) {
     // console.log('handleMessage', event.data);
 
-    const req = JSON.parse(event.data);
+    channel.lastActive = Date.now();
+
+    let req;
+    try {
+      req = JSON.parse(event.data);
+    } catch (e) {
+      return;
+    }
     const {type, id} = req;
 
     if (req.trace) {
@@ -378,10 +385,12 @@ export class Client extends EventEmitter {
     // console.log(closest.length, closest.filter(({conn}) => !!conn).length, message);
     closest.forEach(({id, conn}) => {
       try {
+        // console.log('buffered amount before send', conn.bufferedAmount);
+        // console.log(message);
         conn.send(message);
       } catch (e) {
-        console.log('probably a race', e);
-        // this.removeChannel(id);
+        console.log('error sending to peer, closing', arrayBufferToHex(id), e);
+        conn.close();
       }
     });
   }

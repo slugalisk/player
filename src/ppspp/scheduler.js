@@ -384,9 +384,6 @@ export class Scheduler {
     this.nextSendTimeout = 0;
   }
 
-  // TODO: total downloaded
-  // TODO: total discarded
-  // TODO: upload/download rate
   debug() {
     console.log('---');
     Object.values(this.peerStates).forEach((peerState) => {
@@ -609,7 +606,7 @@ export class Scheduler {
 
   getRecentChunks() {
     // TODO: how to pick this... maybe remote discard window size?
-    const startBin = this.loadedChunks.max() - 512;
+    const startBin = this.loadedChunks.max() - 64;
 
     // bail if no chunks have been loaded yet
     if (!isFinite(startBin)) {

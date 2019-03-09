@@ -1,4 +1,5 @@
 import {EventEmitter} from 'events';
+import once from 'lodash.once';
 import Address from './address';
 import SwarmId from './swarmid';
 import LEDBAT from '../ledbat';
@@ -28,6 +29,7 @@ const genericEncoding = createEncoding();
 
 const BUFFER_SIZE = 3e7;
 const MAX_UPLOAD_RATE = 1e6;
+const HANDSHAKE_TIMEOUT = 5000;
 
 export class Swarm extends EventEmitter {
   constructor(uri, clientOptions) {
@@ -271,6 +273,10 @@ class Peer {
     return this.state === PeerState.READY;
   }
 
+  isInitialized() {
+    return this.state !== PeerState.CONNECTING && this.state !== PeerState.AWAITING_HANDSHAKE;
+  }
+
   sendHandshake() {
     const {encoding} = this.swarm;
     this.sendBuffer.push(new encoding.HandshakeMessage(
@@ -447,6 +453,7 @@ export class Channel extends EventEmitter {
     this.conn.addEventListener('open', () => liveSwarms.forEach(this.handleSwarmInsert));
     this.conn.addEventListener('message', this.handleMessage.bind(this));
     this.conn.addEventListener('error', err => console.log('connection error:', err));
+    this.conn.addEventListener('close', this.handleClose.bind(this));
   }
 
   handleMessage(event) {
@@ -501,7 +508,11 @@ export class Channel extends EventEmitter {
       return;
     }
 
-    this.conn.send(data.toBuffer());
+    try {
+      this.conn.send(data.toBuffer());
+    } catch(e) {
+      this.conn.close();
+    }
   }
 
   handleClose() {
@@ -522,15 +533,23 @@ export class Channel extends EventEmitter {
     peers[peer.localId] = peer;
     peer.init();
 
-    function handleRemove(removedSwarm) {
-      if (removedSwarm === swarm) {
-        delete peers[peer.localId];
-        peer.close();
+    const destroyPeer = once(() => {
+      delete peers[peer.localId];
+      peer.close();
 
-        swarms.removeListener('remove', handleRemove);
+      swarms.removeListener('remove', handleRemove);
+    });
+    setTimeout(() => {
+      if (!peer.isInitialized()) {
+        destroyPeer();
       }
-    }
+    }, HANDSHAKE_TIMEOUT);
 
+    const handleRemove = removedSwarm => {
+      if (removedSwarm === swarm) {
+        destroyPeer();
+      }
+    };
     swarms.on('remove', handleRemove);
 
     return peer;

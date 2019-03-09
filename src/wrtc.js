@@ -115,6 +115,7 @@ export class Client extends EventEmitter {
 
     this.peerConn.addEventListener('icecandidate', candidate => this.mediator.sendIceCandidate(candidate));
     this.peerConn.addEventListener('datachannel', this.handleDataChannel.bind(this));
+    this.peerConn.addEventListener('iceconnectionstatechange', this.handleIceConnectionStateChange.bind(this));
 
     mediator.once('error', () => this.peerConn.close());
     mediator.on('icecandidate', candidate => this.addIceCandidate(candidate));
@@ -150,7 +151,7 @@ export class Client extends EventEmitter {
   }
 
   handleDataChannel(event) {
-    event.channel.addEventListener('close', e => console.log('< begin close event handlers'));
+    // event.channel.addEventListener('close', e => console.log('< begin close event handlers'));
     event.channel.binaryType = 'arraybuffer';
 
     this.waitingChannels ++;
@@ -173,7 +174,7 @@ export class Client extends EventEmitter {
     };
 
     const channel = this.peerConn.createDataChannel(label, options);
-    channel.addEventListener('close', e => console.log('> begin close event handlers'));
+    // channel.addEventListener('close', e => console.log('> begin close event handlers'));
     channel.binaryType = 'arraybuffer';
 
     this.waitingChannels ++;
@@ -191,6 +192,13 @@ export class Client extends EventEmitter {
   resolveWaitingChannel() {
     if (-- this.waitingChannels === 0) {
       this.emit('open');
+    }
+  }
+
+  handleIceConnectionStateChange() {
+    // this seems to be the most reliable way to get connection state in chrome
+    if (this.peerConn.iceConnectionState === 'failed') {
+      this.peerConn.close();
     }
   }
 
