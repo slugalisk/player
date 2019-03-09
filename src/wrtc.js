@@ -1,13 +1,16 @@
 import {EventEmitter} from 'events';
+import WebSocket from './compat/ws';
 import {
   RTCPeerConnection,
   RTCSessionDescription,
   RTCIceCandidate,
-} from 'wrtc';
+} from './compat/wrtc';
 
-const WebSocket = require('detect-node')
-  ? require('ws')
-  : window.WebSocket;
+console.log({
+  RTCPeerConnection,
+  RTCSessionDescription,
+  RTCIceCandidate,
+});
 
 export class ConnManager {
   constructor(bootstrapAddress) {

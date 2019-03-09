@@ -10,9 +10,7 @@ import {
   LiveSignatureAlgorithm,
 } from './constants';
 
-const crypto = require('detect-node')
-  ? require('./webcrypto')
-  : require('./crypto');
+const crypto = require('../compat/crypto');
 
 const toUint8Array = data => new Uint8Array(data);
 

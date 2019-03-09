@@ -4,6 +4,7 @@
   "private": true,
   "homepage": "https://slugalisk.github.io/player",
   "dependencies": {
+    "approximate-number": "^2.0.0",
     "array-buffer-to-hex": "^1.0.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.8.11",
@@ -30,6 +31,7 @@
     "node-webcrypto-ossl": "^1.0.38",
     "qs": "^6.6.0",
     "react": "^16.4.2",
+    "react-app-rewired": "^2.1.0",
     "react-dom": "^16.4.2",
     "react-force-graph-3d": "^1.6.1",
     "react-router-dom": "^4.3.1",
@@ -40,16 +42,17 @@
     "three-spritetext": "^1.0.6",
     "urlsafe-base64": "^1.0.0",
     "uuid": "^3.3.2",
+    "worker-loader": "^2.0.0",
     "wrtc": "^0.3.5",
     "ws": "^6.2.0"
   },
   "scripts": {
-    "start": "HTTPS=true NODE_ENV=development react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom --watch --verbose false",
-    "eject": "react-scripts eject",
+    "start": "HTTPS=true NODE_ENV=development react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test --env=jsdom --watch --verbose false",
+    "eject": "react-app-rewired eject",
     "server": "nodemon --delay 2.5s ./node_modules/.bin/babel-node src/server.js",
-    "_server": "nodemon ./node_modules/.bin/babel-node src/server.js",
+    "relay": "nodemon ./node_modules/.bin/babel-node src/relay.js",
     "predeploy": "yarn run build",
     "deploy": "gh-pages -d build"
   },

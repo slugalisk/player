@@ -37,15 +37,19 @@ export class Client {
     const sub = new dht.SubChannel(this.dhtClient, id);
     const client = this.connManager.createClient(sub);
 
-    this.dhtClient.createChannel(id, client.createDataChannel('dht'));
-    this.ppsppClient.createChannel(client.createDataChannel('ppspp'));
+    const dhtChannel = client.createDataChannel('dht');
+    const ppsppChannel = client.createDataChannel('ppspp');
 
     const timeout = setTimeout(() => client.close(), 10000);
-
     const init = () => {
       clearTimeout(timeout);
       client.init();
     };
+
+    dhtChannel.addEventListener('close', () => client.close());
+
+    this.dhtClient.createChannel(id, dhtChannel);
+    this.ppsppClient.createChannel(ppsppChannel);
 
     this.dhtClient.send(id, 'connect.request', {channelId: sub.id}, init);
   }

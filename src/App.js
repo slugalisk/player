@@ -1,10 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
-import DiagnosticMenu from './DiagnosticMenu';
-// import SwarmPlayer from './SwarmPlayer';
+// import DiagnosticMenu from './DiagnosticMenu';
+import SwarmPlayer from './SwarmPlayer';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
-import {ChunkedReadStream} from './chunkedStream';
+// import {ChunkedReadStream} from './chunkedStream';
 // import qs from 'qs';
 
 import './App.css';
@@ -37,8 +37,8 @@ const App = props => {
     console.log('joining', uri);
 
     const swarm = ppsppClient.joinSwarm(uri);
-    const stream = new ChunkedReadStream(swarm);
-    stream.on('data', d => console.log(`received ${d.length} bytes`));
+    // const stream = new ChunkedReadStream(swarm);
+    // stream.on('data', d => console.log(`received ${d.length} bytes`));
     setSwarm(swarm);
   };
 
@@ -59,8 +59,8 @@ const App = props => {
   };
 
   if (swarm) {
-    return <DiagnosticMenu swarm={swarm} />;
-    // return <SwarmPlayer swarm={swarm} />;
+    // return <DiagnosticMenu swarm={swarm} />;
+    return <SwarmPlayer swarm={swarm} />;
   }
 
   return (

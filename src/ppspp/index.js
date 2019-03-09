@@ -26,7 +26,7 @@ import {
 
 const genericEncoding = createEncoding();
 
-const BUFFER_SIZE = 1e7;
+const BUFFER_SIZE = 3e7;
 const MAX_UPLOAD_RATE = 1e6;
 
 export class Swarm extends EventEmitter {

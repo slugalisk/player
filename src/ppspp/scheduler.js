@@ -384,6 +384,9 @@ export class Scheduler {
     this.nextSendTimeout = 0;
   }
 
+  // TODO: total downloaded
+  // TODO: total discarded
+  // TODO: upload/download rate
   debug() {
     console.log('---');
     Object.values(this.peerStates).forEach((peerState) => {

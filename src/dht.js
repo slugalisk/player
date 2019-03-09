@@ -65,13 +65,13 @@ export class Client extends EventEmitter {
 
   startPeerRequests() {
     let index = 0;
-    let ids = Object.keys(this.knownPeerIds);
 
     const next = () => {
+      let ids = Object.keys(this.knownPeerIds);
+
       for (let retry = 0; retry <= ids.length; retry ++) {
         if (index >= ids.length) {
           index = 0;
-          ids = Object.keys(this.knownPeerIds);
         }
 
         const id = ids[index];

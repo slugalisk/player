@@ -4,15 +4,23 @@ body {
 }
 
 .diagnostic-menu--indent-1 {
-  right: 550px;
+  right: 350px;
 }
 
 .diagnostic-menu--indent-2 {
-  right: 1100px;
+  right: 700px;
 }
 
 .diagnostic-menu--indent-3 {
-  right: 1650px;
+  right: 1050px;
+}
+
+.diagnostic-menu--indent-4 {
+  right: 1400px;
+}
+
+.diagnostic-menu--indent-5 {
+  right: 1750px;
 }
 
 .graph-buttons {

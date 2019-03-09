@@ -198,6 +198,11 @@ export class Client extends EventEmitter {
   }
 
   close() {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+
     this.conns.forEach(conn => conn.close());
     this.emit('close');
     this.removeAllListeners();

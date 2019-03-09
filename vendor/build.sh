@@ -5,7 +5,7 @@ JOBS=${JOBS:-$nproc}
 
 set -e
 
-sudo apt install -y libssl-dev libpcre3-dev zlib1g-dev
+sudo apt install -y build-essential libssl-dev libpcre3-dev zlib1g-dev
 
 pushd `pwd`
 

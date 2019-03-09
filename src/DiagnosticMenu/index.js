@@ -1,5 +1,6 @@
 import React, {Component} from 'react';
 import classNames from 'classnames';
+import approx from 'approximate-number';
 import {scaleLinear} from 'd3-scale';
 
 import './index.css';
@@ -24,6 +25,9 @@ class ToggleButton extends Component {
   }
 }
 
+// TODO: total downloaded
+// TODO: total discarded
+// TODO: upload/download rate
 class SwarmState extends Component {
   render() {
     const {scheduler} = this.props.value;
@@ -82,7 +86,7 @@ class SwarmState extends Component {
     const rows = values.map(({key, value}) => (
       <tr key={key}>
         <td className="diagnostic_table__key_cell">{key}</td>
-        <td>{value}</td>
+        <td>{approx(value)}</td>
       </tr>
     ));
 
@@ -160,7 +164,7 @@ class PeerStateTable extends Component {
     const rows = values.map(({key, value}) => (
       <tr key={key}>
         <td className="diagnostic_table__key_cell">{key}</td>
-        <td>{String(value)}</td>
+        <td>{isFinite(value) ? approx(value) : String(value)}</td>
       </tr>
     ));
 
@@ -219,10 +223,16 @@ class PeerStateTable extends Component {
 }
 
 class AvailabilityMapChart extends Component {
+  static defaultProps = {
+    width: 300,
+    height: 20,
+  }
+
   constructor(props) {
     super(props);
 
     this.canvas = React.createRef();
+    this.scratchCanvas = document.createElement('canvas');
   }
 
   componentDidUpdate() {
@@ -242,16 +252,17 @@ class AvailabilityMapChart extends Component {
       return;
     }
 
-    const ctx = this.canvas.current.getContext('2d');
-    const width = 500;
-    const height = 20;
+    this.scratchCanvas.height = this.props.height;
+    this.scratchCanvas.width = this.props.width;
+
+    const ctx = this.scratchCanvas.getContext('2d');
 
     const scale = scaleLinear()
       .domain([min, max])
-      .range([0, width]);
+      .range([0, this.props.width]);
 
     ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, this.props.width, this.props.height);
 
     ctx.fillStyle = '#ccc';
 
@@ -267,13 +278,15 @@ class AvailabilityMapChart extends Component {
         lastStart = i;
       }
     }
+
+    this.canvas.current.getContext('2d').drawImage(this.scratchCanvas, 0, 0);
   }
 
   render() {
     return (
       <canvas
-        height="20"
-        width="500"
+        height={this.props.height}
+        width={this.props.width}
         ref={this.canvas}
       />
     );
