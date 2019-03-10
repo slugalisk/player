@@ -477,8 +477,6 @@ export class Scheduler {
       sentRequests,
     } = peerState;
 
-    ledbat.digestDelaySamples();
-
     const now = Date.now();
     // const planFor = ledbat.rttMean.value();
     // const planFor = ledbat.rttMean.value() * 2 + ledbat.rttVar.value() * 4;
@@ -497,11 +495,17 @@ export class Scheduler {
 
     if (cancelledRequests.length > 0) {
       this.totalCancelled += cancelledRequests.length;
-      cancelledRequests.forEach(({address}) => sentRequests.remove(address));
+      cancelledRequests.forEach(({address}) => {
+        this.requestedChunks.set(address, false);
+        sentRequests.remove(address);
+      });
 
       // TODO: this is for ack timeout
-      // ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
+      ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
+      // console.log(cancelledRequests);
     }
+
+    ledbat.digestDelaySamples();
 
     const startBin = Math.max(
       this.loadedChunks.values.offset * 2 + 2,
@@ -700,7 +704,7 @@ export class Scheduler {
 
   getNewCompleteBins() {
     const nextExportedBin = this.lastExportedBin + 2;
-    if (nextExportedBin <= this.lastCompletedBin) {
+    if (isFinite(nextExportedBin) && nextExportedBin <= this.lastCompletedBin) {
       this.lastExportedBin = this.lastCompletedBin;
       return [nextExportedBin, this.lastCompletedBin];
     }

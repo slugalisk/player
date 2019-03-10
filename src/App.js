@@ -1,18 +1,30 @@
 import React, {useEffect, useState} from 'react';
 import URI from './ppspp/uri';
-// import DiagnosticMenu from './DiagnosticMenu';
+import DiagnosticMenu from './DiagnosticMenu';
 import SwarmPlayer from './SwarmPlayer';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
-// import {ChunkedReadStream} from './chunkedStream';
-// import qs from 'qs';
+import {ChunkedReadStream} from './chunkedStream';
+import qs from 'qs';
 
 import './App.css';
+
+const useQueryString = queryString => {
+  const [query, setQuery] = useState({});
+
+  useEffect(() => {
+    setQuery(qs.parse(queryString, {ignoreQueryPrefix: true}) || {});
+  }, [queryString]);
+
+  return [query];
+};
 
 const App = props => {
   const [ppsppClient, setPpsppClient] = useState(null);
   const [swarmUri, setSwarmUri] = useState('');
+  const [injectorType, setInjectorType] = useState('');
   const [swarm, setSwarm] = useState(null);
+  const [query] = useQueryString(props.location.search);
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -25,9 +37,10 @@ const App = props => {
 
     const connManager = new ConnManager(bootstrapAddress);
 
-    Client.create(connManager).then(({ppsppClient, swarmUri}) => {
+    Client.create(connManager).then(({ppsppClient, bootstrap: {swarmUri, injectorType}}) => {
       setPpsppClient(ppsppClient);
       setSwarmUri(swarmUri);
+      setInjectorType(injectorType);
     });
   }, []);
 
@@ -37,17 +50,18 @@ const App = props => {
     console.log('joining', uri);
 
     const swarm = ppsppClient.joinSwarm(uri);
-    // const stream = new ChunkedReadStream(swarm);
-    // stream.on('data', d => console.log(`received ${d.length} bytes`));
+    if (injectorType === 'noise') {
+      const stream = new ChunkedReadStream(swarm);
+      stream.on('data', d => console.log(`received ${d.length} bytes`));
+    }
     setSwarm(swarm);
   };
 
-  // useEffect(() => {
-  //   const query = qs.parse(props.location.search, {ignoreQueryPrefix: true});
-  //   if (query.autoplay && swarmUri) {
-  //     joinSwarm();
-  //   }
-  // }, [swarmUri]);
+  useEffect(() => {
+    if (query.autoplay != null && swarmUri) {
+      setImmediate(joinSwarm);
+    }
+  }, [swarmUri, query]);
 
   const onJoinSubmit = e => {
     e.preventDefault();
@@ -59,8 +73,9 @@ const App = props => {
   };
 
   if (swarm) {
-    // return <DiagnosticMenu swarm={swarm} />;
-    return <SwarmPlayer swarm={swarm} />;
+    return injectorType === 'noise'
+      ? <DiagnosticMenu swarm={swarm} />
+      : <SwarmPlayer swarm={swarm} />;
   }
 
   return (

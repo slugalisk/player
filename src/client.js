@@ -3,9 +3,13 @@ import * as dht from './dht';
 import hexToUint8Array from './hexToUint8Array';
 
 export class Client {
-  constructor(connManager, dhtClientId, bootstrapId, conn, swarmUri) {
+  constructor(connManager, conn, bootstrap) {
+    const dhtClientId = hexToUint8Array(bootstrap.id);
+    const bootstrapId = hexToUint8Array(bootstrap.bootstrapId);
+
     this.connManager = connManager;
-    this.swarmUri = swarmUri;
+    this.bootstrap = bootstrap;
+    this.swarmUri = bootstrap.swarmUri;
 
     const client = connManager.createClient(conn);
 
@@ -22,13 +26,7 @@ export class Client {
 
   static create(connManager) {
     return connManager.bootstrap().then(({data, conn}) => {
-      return new Client(
-        connManager,
-        hexToUint8Array(data.id),
-        hexToUint8Array(data.bootstrapId),
-        conn,
-        data.swarmUri,
-      );
+      return new Client(connManager, conn, data);
     });
   }
 

@@ -25,6 +25,8 @@ class ToggleButton extends Component {
   }
 }
 
+const formatNumber = value => isFinite(value) ? approx(value) : String(value);
+
 // TODO: total downloaded
 // TODO: total discarded
 // TODO: upload/download rate
@@ -35,35 +37,35 @@ class SwarmState extends Component {
     const values = [
       {
         key: 'totalSends',
-        value: scheduler.totalSends,
+        value: formatNumber(scheduler.totalSends),
       },
       {
         key: 'totalRequests',
-        value: scheduler.totalRequests,
+        value: formatNumber(scheduler.totalRequests),
       },
       {
         key: 'totalRequestsReceived',
-        value: scheduler.totalRequestsReceived,
+        value: formatNumber(scheduler.totalRequestsReceived),
       },
       {
         key: 'totalDroppedRequests',
-        value: scheduler.totalDroppedRequests,
+        value: formatNumber(scheduler.totalDroppedRequests),
       },
       {
         key: 'totalReceived',
-        value: scheduler.totalReceived,
+        value: formatNumber(scheduler.totalReceived),
       },
       {
         key: 'totalAdded',
-        value: scheduler.totalAdded,
+        value: formatNumber(scheduler.totalAdded),
       },
       {
         key: 'totalCancelled',
-        value: scheduler.totalCancelled,
+        value: formatNumber(scheduler.totalCancelled),
       },
       {
         key: 'ackUnknownSend',
-        value: scheduler.ackUnknownSend,
+        value: formatNumber(scheduler.ackUnknownSend),
       },
       {
         key: 'lastCompletedBin',
@@ -79,14 +81,14 @@ class SwarmState extends Component {
       },
       {
         key: 'chunkRate',
-        value: scheduler.chunkRate.value(),
+        value: formatNumber(scheduler.chunkRate.value()),
       },
     ];
 
     const rows = values.map(({key, value}) => (
       <tr key={key}>
         <td className="diagnostic_table__key_cell">{key}</td>
-        <td>{approx(value)}</td>
+        <td>{value}</td>
       </tr>
     ));
 
@@ -109,62 +111,62 @@ class PeerStateTable extends Component {
     const values = [
       {
         key: 'chunkIntervalMean',
-        value: peerState.chunkIntervalMean.value(),
+        value: formatNumber(peerState.chunkIntervalMean.value()),
       },
       {
         key: 'wasteRate',
-        value: peerState.wasteRate.value(),
+        value: formatNumber(peerState.wasteRate.value()),
       },
       {
         key: 'chunkRate',
-        value: peerState.chunkRate.value(),
+        value: formatNumber(peerState.chunkRate.value()),
       },
       {
         key: 'ledbat.baseDelay',
-        value: peerState.ledbat.baseDelay.getMin(),
+        value: formatNumber(peerState.ledbat.baseDelay.getMin()),
       },
       {
         key: 'ledbat.currentDelay',
-        value: peerState.ledbat.currentDelay.getMin(),
+        value: formatNumber(peerState.ledbat.currentDelay.getMin()),
       },
       {
         key: 'ledbat.rttMean',
-        value: peerState.ledbat.rttMean.value(),
+        value: formatNumber(peerState.ledbat.rttMean.value()),
       },
       {
         key: 'ledbat.rttVar',
-        value: peerState.ledbat.rttVar.value(),
+        value: formatNumber(peerState.ledbat.rttVar.value()),
       },
       {
         key: 'ledbat.cwnd',
-        value: peerState.ledbat.cwnd,
+        value: formatNumber(peerState.ledbat.cwnd),
       },
       {
         key: 'ledbat.cto',
-        value: peerState.ledbat.cto,
+        value: formatNumber(peerState.ledbat.cto),
       },
       {
         key: 'ledbat.flightSize',
-        value: peerState.ledbat.flightSize,
+        value: formatNumber(peerState.ledbat.flightSize),
       },
       {
         key: 'validChunks',
-        value: peerState.validChunks,
+        value: formatNumber(peerState.validChunks),
       },
       {
         key: 'requestQueue.length',
-        value: peerState.requestQueue.length,
+        value: formatNumber(peerState.requestQueue.length),
       },
       {
         key: 'requestedChunks.length',
-        value: peerState.requestedChunks.length,
+        value: formatNumber(peerState.requestedChunks.length),
       },
     ];
 
     const rows = values.map(({key, value}) => (
       <tr key={key}>
         <td className="diagnostic_table__key_cell">{key}</td>
-        <td>{isFinite(value) ? approx(value) : String(value)}</td>
+        <td>{value}</td>
       </tr>
     ));
 

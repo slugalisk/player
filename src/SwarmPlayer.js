@@ -6,8 +6,6 @@ import {Buffer} from 'buffer';
 
 import './SwarmPlayer.css';
 
-const log = e => console.log(e);
-
 export default class SwarmPlayer extends Component {
   constructor(props) {
     super(props);
@@ -17,7 +15,7 @@ export default class SwarmPlayer extends Component {
   componentDidMount() {
     const mediaSource = new MediaSource();
 
-    this.video.current.addEventListener('error', log);
+    this.video.current.addEventListener('error', e => console.log(e));
     this.video.current.src = URL.createObjectURL(mediaSource);
 
     mediaSource.addEventListener('sourceopen', () => this.handleSourceOpen(mediaSource));
@@ -25,18 +23,26 @@ export default class SwarmPlayer extends Component {
     this.video.current.play();
   }
 
-  handleSourceOpen = (mediaSource) => {
+  handleSourceOpen = mediaSource => {
     const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="mp4a.40.5,avc1.64001F"');
-    sourceBuffer.addEventListener('updatestart', log);
-    sourceBuffer.addEventListener('updateend', log);
-    sourceBuffer.addEventListener('error', log);
+    // sourceBuffer.addEventListener('updatestart', e => console.log(e));
+    // sourceBuffer.addEventListener('updateend', e => console.log(e));
+    sourceBuffer.addEventListener('error', e => console.log(e));
 
     const videoSegments = [];
     let initSet = false;
 
+    const safelyAppendBuffer = segment => {
+      try {
+        sourceBuffer.appendBuffer(segment);
+      } catch (e) {
+        setImmediate(() => safelyAppendBuffer(segment));
+      }
+    };
+
     sourceBuffer.addEventListener('updateend', () => {
       if (videoSegments.length) {
-        sourceBuffer.appendBuffer(videoSegments.shift());
+        safelyAppendBuffer(videoSegments.shift());
       }
     });
 
@@ -51,7 +57,7 @@ export default class SwarmPlayer extends Component {
         if (sourceBuffer.updating) {
           videoSegments.push(new Uint8Array(buf));
         } else {
-          sourceBuffer.appendBuffer(new Uint8Array(buf));
+          safelyAppendBuffer(new Uint8Array(buf));
         }
       } else {
         console.log('unhandled event', event.type);

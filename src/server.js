@@ -88,6 +88,7 @@ wss.on('connection', function(conn, req) {
     type: 'bootstrap',
     bootstrapId: arrayBufferToHex(dhtClient.id),
     id: arrayBufferToHex(id),
+    injectorType,
     swarmUri,
   }));
 });
@@ -96,7 +97,8 @@ const injectorTypes = {
   nginx: NginxInjector,
   noise: ChunkedWriteStreamInjector,
 };
-const Injector = injectorTypes[process.env.INJECTOR || 'noise'];
+const injectorType = process.env.INJECTOR || 'noise';
+const Injector = injectorTypes[injectorType];
 const injector = new Injector();
 injector.start();
 

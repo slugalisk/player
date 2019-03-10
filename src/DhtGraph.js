@@ -227,7 +227,7 @@ const useNodePinger = () => {
       return;
     }
 
-    console.log('pinging %s > %s', arrayBufferToHex(source.dhtClient.id), arrayBufferToHex(node.dhtClient.id))
+    console.log('pinging %s > %s', arrayBufferToHex(source.dhtClient.id), arrayBufferToHex(node.dhtClient.id));
     source.dhtClient.sendPing(node.dhtClient.id, (data) => {
       console.log('received ping response', data);
     });

@@ -229,6 +229,7 @@ class Peer {
       })
       .catch((err) => {
         console.log('error validating chunk', err);
+        debugger;
         this.swarm.scheduler.markChunkRejected(this, address);
       });
   }
@@ -510,7 +511,7 @@ export class Channel extends EventEmitter {
 
     try {
       this.conn.send(data.toBuffer());
-    } catch(e) {
+    } catch (e) {
       this.conn.close();
     }
   }
