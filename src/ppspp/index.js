@@ -99,7 +99,11 @@ export class Swarm extends EventEmitter {
       const [minNewBin, maxNewBin] = newBins;
       const chunks = [];
       for (let i = minNewBin; i <= maxNewBin; i += 2) {
-        chunks.push(this.chunkBuffer.get(new Address(i)));
+        const chunk = this.chunkBuffer.get(new Address(i));
+        if (chunk === undefined) {
+          debugger;
+        }
+        chunks.push(chunk);
       }
       this.emit('data', chunks);
     }
@@ -229,7 +233,6 @@ class Peer {
       })
       .catch((err) => {
         console.log('error validating chunk', err);
-        debugger;
         this.swarm.scheduler.markChunkRejected(this, address);
       });
   }

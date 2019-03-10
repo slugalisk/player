@@ -352,7 +352,6 @@ export class Scheduler {
 
     this.peerStates = {};
     this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
-    this.definitelyLoadedChunks = [];
     this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
     this.peerCount = 0;
 
@@ -596,8 +595,18 @@ export class Scheduler {
       return;
     }
 
-    const {requestFlow} = peerState;
+    const {
+      requestFlow,
+      sentRequests,
+    } = peerState;
+
     this.requestQueue.removeFlow(requestFlow);
+
+    this.totalCancelled += sentRequests.length;
+    while (sentRequests.length) {
+      const {address} = sentRequests.pop();
+      this.requestedChunks.set(address, false);
+    }
 
     delete this.peerStates[localId];
 
@@ -687,7 +696,6 @@ export class Scheduler {
 
     // this.chunkStates.advanceLastBin(address.end);
 
-    this.definitelyLoadedChunks.push(address.bin);
     this.chunkRate.update(address);
     this.loadedChunks.set(address);
 
@@ -704,7 +712,7 @@ export class Scheduler {
 
   getNewCompleteBins() {
     const nextExportedBin = this.lastExportedBin + 2;
-    if (isFinite(nextExportedBin) && nextExportedBin <= this.lastCompletedBin) {
+    if (nextExportedBin <= this.lastCompletedBin) {
       this.lastExportedBin = this.lastCompletedBin;
       return [nextExportedBin, this.lastCompletedBin];
     }
