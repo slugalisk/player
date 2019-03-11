@@ -5,6 +5,7 @@ import SwarmPlayer from './SwarmPlayer';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
 import {ChunkedReadStream} from './chunkedStream';
+import PlayButton from './PlayButton';
 import qs from 'qs';
 
 import './App.css';
@@ -25,6 +26,8 @@ const App = props => {
   const [injectorType, setInjectorType] = useState('');
   const [swarm, setSwarm] = useState(null);
   const [query] = useQueryString(props.location.search);
+
+  const autoPlay = 'autoplay' in query;
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -58,7 +61,7 @@ const App = props => {
   };
 
   useEffect(() => {
-    if (query.autoplay != null && swarmUri) {
+    if (autoPlay && swarmUri) {
       setImmediate(joinSwarm);
     }
   }, [swarmUri, query]);
@@ -78,12 +81,9 @@ const App = props => {
       : <SwarmPlayer swarm={swarm} />;
   }
 
-  return (
-    <React.Fragment>
-      <div className="idle">
-        <div className="scanner"></div>
-        <div className="noise"></div>
-      </div>
+  let joinForm;
+  if ('show_form' in query) {
+    joinForm = (
       <form className="join-form" onSubmit={onJoinSubmit}>
         <input
           onChange={onInputChange}
@@ -92,6 +92,27 @@ const App = props => {
         />
         <button>Join</button>
       </form>
+    );
+  } else {
+    joinForm = (
+      <PlayButton
+        disabled={swarmUri === ''}
+        onClick={joinSwarm}
+        pulse={!autoPlay}
+        spin={swarmUri === ''}
+        flicker={autoPlay}
+        blur
+      />
+    );
+  }
+
+  return (
+    <React.Fragment>
+      <div className="idle">
+        {/* <div className="scanner"></div> */}
+        <div className="noise"></div>
+      </div>
+      {joinForm}
     </React.Fragment>
   );
 };

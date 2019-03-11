@@ -29,6 +29,7 @@
     "lodash.once": "^4.1.1",
     "mux.js": "^5.0.0",
     "node-forge": "^0.7.6",
+    "node-sass": "^4.11.0",
     "node-webcrypto-ossl": "^1.0.38",
     "qs": "^6.6.0",
     "react": "^16.4.2",

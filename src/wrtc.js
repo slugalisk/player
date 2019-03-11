@@ -6,12 +6,6 @@ import {
   RTCIceCandidate,
 } from './compat/wrtc';
 
-console.log({
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCIceCandidate,
-});
-
 export class ConnManager {
   constructor(bootstrapAddress) {
     this.bootstrapAddress = bootstrapAddress;
