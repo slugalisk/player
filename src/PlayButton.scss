@@ -1,7 +1,7 @@
 .play_button {
   width: 200px;
   height: 200px;
-  transition: 300ms filter linear, 300ms opacity ease-in-out;
+  transition: 200ms filter ease-in-out, 300ms opacity ease-in-out;
 
   .background {
     fill: #000
@@ -57,10 +57,23 @@
   }
 
   &.pulse {
-    animation: pulse 2s linear infinite;
+    animation: pulse-opacity 2s linear infinite;
 
     &.spin {
-      animation: spin 1.5s linear infinite, pulse 2s linear infinite;
+      animation: spin 1.5s linear infinite, pulse-opacity 2s linear infinite;
+    }
+  }
+
+  &.error {
+    animation: none;
+    transform: rotate(-90deg) scale(0.8);
+    transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+
+    .network {
+      transition: all 150ms ease-in-out;
+      animation: pulse-opacity 2s linear infinite;
+      fill: #b11623;
+      opacity: 0.8;
     }
   }
 
@@ -106,7 +119,7 @@
   }
 }
 
-@keyframes pulse {
+@keyframes pulse-opacity {
   0% {
     opacity: 0.3;
   }

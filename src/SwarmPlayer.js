@@ -4,20 +4,19 @@ import {ChunkedFragmentedReadStream} from './chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
 import {Buffer} from 'buffer';
 import PlayButton from './PlayButton';
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
+import {faSyncAlt} from '@fortawesome/free-solid-svg-icons';
 
-import './SwarmPlayer.css';
+import './SwarmPlayer.scss';
 
 const useSwarmMediaSource = swarm => {
-  const [mediaSource, setMediaSource] = useState();
-
-  useEffect(() => {
+  const [mediaSource] = useState(() => {
     const mediaSource = new MediaSource();
-    setMediaSource(mediaSource);
-
-    mediaSource.addEventListener('sourceopen', () => handleSourceOpen(mediaSource));
+    mediaSource.addEventListener('sourceopen', handleSourceOpen);
+    return mediaSource;
   }, []);
 
-  const handleSourceOpen = mediaSource => {
+  function handleSourceOpen() {
     const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="mp4a.40.5,avc1.64001F"');
     // sourceBuffer.addEventListener('updatestart', e => console.log(e));
     // sourceBuffer.addEventListener('updateend', e => console.log(e));
@@ -71,129 +70,145 @@ const useSwarmMediaSource = swarm => {
       transmuxer.push(data);
       transmuxer.flush();
     });
-  };
+  }
 
-  return [mediaSource];
+  return mediaSource;
 };
 
-const SwarmPlayer = ({swarm}) =>{
-  const video = useRef(null);
-  const [mediaSource] = useSwarmMediaSource(swarm);
-  const [played, setPlayed] = useState(false);
+const useVideo = () => {
+  const ref = useRef();
+  const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [buffering, setBuffering] = useState(true);
+  const [ended, setEnded] = useState(true);
+  const [waiting, setWaiting] = useState(true);
+  const [muted, setMuted] = useState(null);
   const [volume, setVolume] = useState(null);
 
-  console.log({paused, volume});
-
   useEffect(() => {
-    if (video.current == null || mediaSource == null) {
+    if (ref.current == null) {
       return;
     }
 
-    video.current.src = URL.createObjectURL(mediaSource);
+    setMuted(ref.current.muted);
+    setVolume(ref.current.volume);
+    setPaused(ref.current.paused);
 
-    setVolume(video.current.volume);
+    ref.current.addEventListener('audioprocess', e => console.log(new Date().toUTCString(), 'audioprocess', e));
+    ref.current.addEventListener('canplay', e => console.log(new Date().toUTCString(), 'canplay', e));
+    ref.current.addEventListener('canplaythrough', e => console.log(new Date().toUTCString(), 'canplaythrough', e));
+    ref.current.addEventListener('complete', e => console.log(new Date().toUTCString(), 'complete', e));
+    ref.current.addEventListener('durationchange', e => console.log(new Date().toUTCString(), 'durationchange', e));
+    ref.current.addEventListener('emptied', e => console.log(new Date().toUTCString(), 'emptied', e));
+    ref.current.addEventListener('ended', e => console.log(new Date().toUTCString(), 'ended', e));
+    ref.current.addEventListener('loadeddata', e => console.log(new Date().toUTCString(), 'loadeddata', e));
+    ref.current.addEventListener('loadedmetadata', e => console.log(new Date().toUTCString(), 'loadedmetadata', e));
+    ref.current.addEventListener('pause', e => console.log(new Date().toUTCString(), 'pause', e));
+    ref.current.addEventListener('play', e => console.log(new Date().toUTCString(), 'play', e));
+    ref.current.addEventListener('playing', e => console.log(new Date().toUTCString(), 'playing', e));
+    ref.current.addEventListener('ratechange', e => console.log(new Date().toUTCString(), 'ratechange', e));
+    ref.current.addEventListener('seeked', e => console.log(new Date().toUTCString(), 'seeked', e));
+    ref.current.addEventListener('seeking', e => console.log(new Date().toUTCString(), 'seeking', e));
+    ref.current.addEventListener('stalled', e => console.log(new Date().toUTCString(), 'stalled', e));
+    ref.current.addEventListener('suspend', e => console.log(new Date().toUTCString(), 'suspend', e));
+    // ref.current.addEventListener('timeupdate', e => console.log(new Date().toUTCString(), 'timeupdate', e));
+    ref.current.addEventListener('volumechange', e => console.log(new Date().toUTCString(), 'volumechange', e));
+    ref.current.addEventListener('waiting', e => console.log(new Date().toUTCString(), 'waiting', e));
+  }, [ref]);
 
-    video.current.addEventListener('audioprocess', e => console.log(new Date().toUTCString(), 'audioprocess', e));
-    video.current.addEventListener('canplay', e => console.log(new Date().toUTCString(), 'canplay', e));
-    video.current.addEventListener('canplaythrough', e => console.log(new Date().toUTCString(), 'canplaythrough', e));
-    video.current.addEventListener('complete', e => console.log(new Date().toUTCString(), 'complete', e));
-    video.current.addEventListener('durationchange', e => console.log(new Date().toUTCString(), 'durationchange', e));
-    video.current.addEventListener('emptied', e => console.log(new Date().toUTCString(), 'emptied', e));
-    video.current.addEventListener('ended', e => console.log(new Date().toUTCString(), 'ended', e));
-    video.current.addEventListener('loadeddata', e => console.log(new Date().toUTCString(), 'loadeddata', e));
-    video.current.addEventListener('loadedmetadata', e => console.log(new Date().toUTCString(), 'loadedmetadata', e));
-    video.current.addEventListener('pause', e => console.log(new Date().toUTCString(), 'pause', e));
-    video.current.addEventListener('play', e => console.log(new Date().toUTCString(), 'play', e));
-    video.current.addEventListener('playing', e => console.log(new Date().toUTCString(), 'playing', e));
-    video.current.addEventListener('ratechange', e => console.log(new Date().toUTCString(), 'ratechange', e));
-    video.current.addEventListener('seeked', e => console.log(new Date().toUTCString(), 'seeked', e));
-    video.current.addEventListener('seeking', e => console.log(new Date().toUTCString(), 'seeking', e));
-    video.current.addEventListener('stalled', e => console.log(new Date().toUTCString(), 'stalled', e));
-    video.current.addEventListener('suspend', e => console.log(new Date().toUTCString(), 'suspend', e));
-    // video.current.addEventListener('timeupdate', e => console.log(new Date().toUTCString(), 'timeupdate', e));
-    video.current.addEventListener('volumechange', e => console.log(new Date().toUTCString(), 'volumechange', e));
-    video.current.addEventListener('waiting', e => console.log(new Date().toUTCString(), 'waiting', e));
+  const onEnded = () => {
+    setPlaying(false);
+    setEnded(false);
+    setWaiting(false);
+  };
 
-    const handleEnded = () => {
-      setPlaying(false);
-      setLoading(false);
-    };
+  const onPause = () => {
+    setPlaying(false);
+    setPaused(true);
+  };
 
-    const handleComplete = () => {
-      setPlaying(false);
-      setLoading(false);
-    };
+  const onPlaying = () => {
+    setPaused(false);
+    setPlaying(true);
+  };
 
-    const handlePause = () => {
-      setPlaying(false);
-    };
+  const onCanPlay = () => {
+    setWaiting(false);
+    setLoaded(true);
+  };
 
-    const handlePlaying = () => {
-      setPaused(false);
-      setPlaying(true);
-      setPlayed(true);
-    };
+  const onVolumeChange = () => {
+    setVolume(ref.current.volume);
+  };
 
-    const handleCanplay = () => {
-      setBuffering(false);
-    };
-
-    const handleVolumeChange = () => {
-      setVolume(video.current.volume);
-    };
-
-    const handleWaiting = () => {
-      setPlaying(false);
-      setBuffering(true);
-    };
-
-    video.current.addEventListener('ended', handleEnded);
-    video.current.addEventListener('complete', handleComplete);
-    video.current.addEventListener('pause', handlePause);
-    video.current.addEventListener('playing', handlePlaying);
-    video.current.addEventListener('canplay', handleCanplay);
-    video.current.addEventListener('volumechange', handleVolumeChange);
-    video.current.addEventListener('waiting', handleWaiting);
-
-    play();
-
-    return () => {
-      video.current.removeEventListener('ended', handleEnded);
-      video.current.removeEventListener('complete', handleComplete);
-      video.current.removeEventListener('pause', handlePause);
-      video.current.removeEventListener('playing', handlePlaying);
-      video.current.removeEventListener('canplay', handleCanplay);
-      video.current.removeEventListener('volumechange', handleVolumeChange);
-      video.current.removeEventListener('waiting', handleWaiting);
-    };
-  }, [video, mediaSource]);
+  const onWaiting = () => {
+    setPlaying(false);
+    setWaiting(true);
+  };
 
   const play = async () => {
     try {
-      await video.current.play();
+      await ref.current.play();
     } catch (e) {
-      video.current.muted = true;
+      ref.current.muted = true;
       try {
-        await video.current.play();
+        await ref.current.play();
       } catch (e) {
         console.warn('error playing video', e);
       }
     }
   };
 
-  // TODO: use a generic loading animation for buffering
-  const playButton = (
+  return [
+    {
+      loaded,
+      playing,
+      paused,
+      ended,
+      waiting,
+      muted,
+      volume,
+    },
+    {
+      ref,
+      onEnded,
+      onPause,
+      onPlaying,
+      onCanPlay,
+      onVolumeChange,
+      onWaiting,
+    },
+    {
+      play,
+    },
+  ];
+};
+
+const SwarmPlayer = ({swarm}) =>{
+  const [videoState, videoProps, videoControls] = useVideo();
+  const mediaSource = useSwarmMediaSource(swarm);
+
+  useEffect(() => {
+    if (videoProps.ref.current != null && mediaSource != null) {
+      videoProps.ref.current.src = URL.createObjectURL(mediaSource);
+      videoControls.play();
+    }
+  }, [videoProps.ref, mediaSource]);
+
+  console.log(videoState);
+
+  const playButton = (videoState.waiting && videoState.loaded) ? (
+    <div className="swarm_player__waiting_spinner">
+      <FontAwesomeIcon icon={faSyncAlt} />
+    </div>
+  ) : (
     <PlayButton
-      visible={!playing}
-      onClick={play}
-      blur={!played}
-      flicker={loading && !played}
-      spin={buffering && played}
-      disabled={buffering || !played}
+      visible={!videoState.playing}
+      onClick={videoControls.play}
+      flicker={videoState.ended && !videoState.loaded}
+      spin={videoState.waiting && videoState.loaded}
+      disabled={videoState.waiting || !videoState.loaded}
+      blur={true}
     />
   );
 
@@ -202,8 +217,8 @@ const SwarmPlayer = ({swarm}) =>{
       <DiagnosticMenu swarm={swarm} />
       <video
         onClick={e => e.preventDefault()}
-        className="swarm-player-video"
-        ref={video}
+        className="swarm_player__video"
+        {...videoProps}
       />
       {playButton}
     </React.Fragment>
