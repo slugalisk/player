@@ -11,16 +11,19 @@ import crypto from 'crypto';
 import arrayBufferToHex from 'array-buffer-to-hex';
 import NginxInjector from './NginxInjector';
 import {ChunkedWriteStreamInjector} from './chunkedStream';
+import compression from 'compression';
 import * as dht from './dht';
 import * as ppspp from './ppspp';
 import * as wrtc from './wrtc';
+import * as pubsub from './pubsub';
 
 const args = require('minimist')(process.argv.slice(2));
 const port = args.p || process.env.PORT || 8080;
 
-let swarmUri = '';
+const swarms = [];
 
 const app = express();
+app.use(compression());
 app.use(express.static(process.env.STATIC_PATH || 'public'));
 
 const createHttpsServer = app => https.createServer({
@@ -44,7 +47,7 @@ const generateRandomId = () => {
   return new Uint8Array(id);
 };
 
-const generateIdFromGeo = (addr) => {
+const generateIdFromGeo = addr => {
   const location = ip2location.IP2Location_get_all(addr);
   const prefix = (new hilbert.Hilbert2d(1)).xy2d(
     Math.round(((parseFloat(location.longitude) || 0) + 180) * 100),
@@ -72,7 +75,7 @@ const wss = new ws.Server({server});
 wss.on('connection', function(conn, req) {
   const mediator = new wrtc.Mediator(conn);
   const client = new wrtc.Client(mediator);
-  const id = generateId(req.connection.remoteAddress);
+  const id = generateId(req.headers[process.env.IP_HEADER] || req.connection.remoteAddress);
 
   mediator.on('error', () => conn.close());
 
@@ -88,50 +91,83 @@ wss.on('connection', function(conn, req) {
     type: 'bootstrap',
     bootstrapId: arrayBufferToHex(dhtClient.id),
     id: arrayBufferToHex(id),
-    injectorType,
-    swarmUri,
+    swarms,
   }));
 });
 
-const injectorTypes = {
-  nginx: NginxInjector,
-  noise: ChunkedWriteStreamInjector,
-};
-const injectorType = process.env.INJECTOR || 'noise';
-const Injector = injectorTypes[injectorType];
-const injector = new Injector();
-injector.start();
+const registerInjector = factory => {
+  factory.on('publish', ({name, contentType, injector: {swarm}}) => {
+    ppsppClient.publishSwarm(swarm);
 
-injector.on('publish', ({swarm}) => {
-  swarmUri = swarm.uri.toString();
-  ppsppClient.publishSwarm(swarm);
-});
+    const uri = swarm.uri.toString();
+    swarms.push({name, contentType, uri});
+    indexInjector.publish({type: 'PUBLISH_SWARM', name, contentType, uri});
+  });
 
-injector.on('unpublish', ({swarm}) => {
-  ppsppClient.unpublishSwarm(swarm);
-});
+  factory.on('unpublish', ({name, injector: {swarm}}) => {
+    const index = swarms.findIndex(entry => entry.swarm === swarm);
+    if (index !== -1) {
+      ppsppClient.unpublishSwarm(swarm);
 
-const shutdown = (signal = 'SIGTERM') => {
-  console.log(`got signal ${signal}`);
-  injector.stop(() => {
-    console.log('injector shut down');
-    server.close(() => {
-      console.log('server shut down');
-      wss.close(() => {
-        console.log('wss shut down');
-        process.kill(process.pid, signal);
-        // process.exit(signal);
+      swarms.splice(index, 1);
+      indexInjector.publish({
+        type: 'UNPUBLISH_SWARM',
+        name,
+        uri: swarm.uri.toString(),
       });
-    });
+    }
   });
 };
 
+const nginxInjector = new NginxInjector();
+const noiseInjector = new ChunkedWriteStreamInjector();
+const pubSubInjector = new pubsub.Injector();
+
+registerInjector(nginxInjector);
+registerInjector(noiseInjector);
+registerInjector(pubSubInjector);
+
+const indexInjector = pubSubInjector.createTopic('index');
+
+const heartbeatInjector = pubSubInjector.createTopic('heartbeat');
+let heartbeatSequence = 0;
+setInterval(() => heartbeatInjector.publish({
+  type: 'HEARTBEAT',
+  time: new Date(),
+  sequence: heartbeatSequence ++,
+}), 500);
+
+const chatInjector = pubSubInjector.createTopic('chat');
+let chatSequence = 0;
+dhtClient.on('receive.chat.message', ({data}) => {
+  console.log(data);
+  chatInjector.publish({
+    type: 'MESSAGE',
+    time: new Date(),
+    id: chatSequence ++,
+    message: data.message,
+  });
+});
+
+nginxInjector.start();
+
+noiseInjector.start({name: 'noise', bitRate: 3500000});
+
+const shutdown = (signal = 'SIGTERM') => {
+  const close = (close, message) => new Promise(resolve => close(resolve)).then(() => console.log(message));
+
+  Promise.all([
+    close(nginxInjector.stop.bind(nginxInjector), 'nginx injector shut down'),
+    close(server.close.bind(server), 'server shut down'),
+    close(wss.close.bind(wss), 'wss shut down'),
+  ]).then(() => process.kill(process.pid, signal));
+};
+
 process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
 process.once('SIGUSR2', shutdown);
 
 process.on('uncaughtException', (err) => {
-  injector.stop();
-  server.close();
+  shutdown();
   throw err;
 });
-

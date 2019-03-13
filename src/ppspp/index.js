@@ -431,6 +431,11 @@ export class Client {
     return swarm;
   }
 
+  leaveSwarm({id}) {
+    const swarm = this.swarms.get(id);
+    this.swarms.remove(swarm);
+  }
+
   createChannel(conn) {
     const channel = new Channel(conn, this.swarms);
     this.channels.push(channel);

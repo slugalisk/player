@@ -32,7 +32,11 @@ export default class NginxInjector extends EventEmitter {
 
       this.writers[req.body.name] = new ChunkedWriteStream(injector);
       this.injectors[req.body.name] = injector;
-      this.emit('publish', injector);
+      this.emit('publish', {
+        name: req.body.name,
+        contentType: 'video/mpeg-ts',
+        injector,
+      });
     });
   }
 
@@ -45,15 +49,19 @@ export default class NginxInjector extends EventEmitter {
     console.log('handlePublishDone', req.body);
     res.status(200).send('');
 
-    this.emit('unpublish', this.injectors[req.body.name]);
+    this.emit('unpublish', {
+      name: req.body.name,
+      injector: this.injectors[req.body.name],
+    });
     delete this.injectors[req.body.name];
   }
 
   handleVideoChunk(filename) {
+    /* eslint-disable-next-line */
     const [streamName, chunkId] = path.basename(filename, '.ts').split('-');
 
     fs.readFile(filename, {}, (err, data) => {
-      console.log(streamName, chunkId, err, data.length);
+      // console.log(streamName, chunkId, err, data.length);
 
       const writer = this.writers[streamName];
       if (writer !== undefined) {

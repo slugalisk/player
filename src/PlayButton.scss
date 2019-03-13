@@ -24,12 +24,8 @@
     transition: 120ms transform ease-in;
   }
 
-  &.exiting {
-    opacity: 0;
-  }
-
+  &.exiting,
   &.hidden {
-    display: none;
     opacity: 0;
   }
 
@@ -107,6 +103,10 @@
   top: 50%;
   left: 50%;
   margin: -100px 0 0 -100px;
+
+  &.hidden {
+    display: none;
+  }
 }
 
 .play_button_wrap.hovering {

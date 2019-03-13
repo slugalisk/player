@@ -4,7 +4,7 @@ import {Client} from './client';
 import {ChunkedReadStream, ChunkedWriteStreamInjector} from './chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
 
-import './App.css';
+import './App.scss';
 
 const App = () => {
   const [server] = useState(new Server());

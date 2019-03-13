@@ -123,3 +123,58 @@ body {
     animation-timing-function: step-end;
   }
 }
+
+.chat {
+  position: absolute;
+  background-color: white;
+  height: 500px;
+  width: 300px;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+
+  .messages {
+    flex-grow: 1;
+    background-color: #eee;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+
+    .message {
+      margin: 8px;
+
+      .timestamp {
+        padding-right: 4px;
+
+        &:after {
+          content: ":";
+        }
+      }
+    }
+  }
+
+  .compose-form {
+    flex-grow: 0;
+    flex-shrink: 0;
+    display: flex;
+    height: 40px;
+    background: green;
+
+    .message-input {
+      width: 100%;
+      flex-shrink: 1;
+      text-indent: 10px;
+    }
+
+    .send-button {
+      flex-grow: 0;
+      flex-shrink: 0;
+      background: #ccc;
+      border: none;
+    }
+  }
+}

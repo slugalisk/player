@@ -75,6 +75,23 @@ const useSwarmMediaSource = swarm => {
   return mediaSource;
 };
 
+export const VideoReadyState = {
+  // No information is available about the media resource.
+  HAVE_NOTHING: 0,
+  // Enough of the media resource has been retrieved that the metadata attributes
+  // are initialized. Seeking will no longer raise an exception.
+  HAVE_METADATA: 1,
+  // Data is available for the current playback position, but not enough to
+  // actually play more than one frame.
+  HAVE_CURRENT_DATA: 2,
+  // Data for the current playback position as well as for at least a little
+  // bit of time into the future is available (in other words, at least two frames of video, for example).
+  HAVE_FUTURE_DATA: 3,
+  // Enough data is available—and the download rate is high enough—that the
+  // media can be played through to the end without interruption.
+  HAVE_ENOUGH_DATA: 4,
+};
+
 const useVideo = () => {
   const ref = useRef();
   const [loaded, setLoaded] = useState(false);
@@ -84,6 +101,7 @@ const useVideo = () => {
   const [waiting, setWaiting] = useState(true);
   const [muted, setMuted] = useState(null);
   const [volume, setVolume] = useState(null);
+  const [readyState, setReadyState] = useState(0);
 
   useEffect(() => {
     if (ref.current == null) {
@@ -93,6 +111,7 @@ const useVideo = () => {
     setMuted(ref.current.muted);
     setVolume(ref.current.volume);
     setPaused(ref.current.paused);
+    setReadyState(ref.current.readyState);
 
     ref.current.addEventListener('audioprocess', e => console.log(new Date().toUTCString(), 'audioprocess', e));
     ref.current.addEventListener('canplay', e => console.log(new Date().toUTCString(), 'canplay', e));
@@ -114,6 +133,7 @@ const useVideo = () => {
     // ref.current.addEventListener('timeupdate', e => console.log(new Date().toUTCString(), 'timeupdate', e));
     ref.current.addEventListener('volumechange', e => console.log(new Date().toUTCString(), 'volumechange', e));
     ref.current.addEventListener('waiting', e => console.log(new Date().toUTCString(), 'waiting', e));
+    ref.current.addEventListener('readystatechange', e => console.log(new Date().toUTCString(), 'readystatechange', e));
   }, [ref]);
 
   const onEnded = () => {
@@ -130,11 +150,19 @@ const useVideo = () => {
   const onPlaying = () => {
     setPaused(false);
     setPlaying(true);
+    setReadyState(ref.current.readyState);
   };
 
   const onCanPlay = () => {
     setWaiting(false);
     setLoaded(true);
+    setReadyState(ref.current.readyState);
+  };
+
+  const onCanPlayThrough = () => {
+    setWaiting(false);
+    setLoaded(true);
+    setReadyState(ref.current.readyState);
   };
 
   const onVolumeChange = () => {
@@ -144,6 +172,26 @@ const useVideo = () => {
   const onWaiting = () => {
     setPlaying(false);
     setWaiting(true);
+    setReadyState(ref.current.readyState);
+  };
+
+  const onDurationChange = () => {
+    setReadyState(ref.current.readyState);
+  };
+
+  const onLoadedMetadata = (e) => {
+    setReadyState(ref.current.readyState);
+  };
+
+  const onLoadedData = () => {
+    setReadyState(ref.current.readyState);
+  };
+
+  const onTimeUpdate = () => {
+    console.log({
+      buffered: ref.current.buffered,
+      seekable: ref.current.seekable,
+    });
   };
 
   const play = async () => {
@@ -161,6 +209,7 @@ const useVideo = () => {
 
   return [
     {
+      readyState,
       loaded,
       playing,
       paused,
@@ -175,8 +224,13 @@ const useVideo = () => {
       onPause,
       onPlaying,
       onCanPlay,
+      onCanPlayThrough,
       onVolumeChange,
       onWaiting,
+      onDurationChange,
+      onLoadedMetadata,
+      onLoadedData,
+      // onTimeUpdate,
     },
     {
       play,

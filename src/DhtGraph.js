@@ -8,7 +8,7 @@ import {scaleOrdinal} from 'd3-scale';
 // import SpriteText from 'three-spritetext';
 // import {Mesh, SphereBufferGeometry, MeshLambertMaterial} from 'three';
 
-import './App.css';
+import './App.scss';
 
 const color = scaleOrdinal(schemeCategory10);
 

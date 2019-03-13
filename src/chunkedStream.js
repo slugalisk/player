@@ -28,11 +28,20 @@ export class ChunkedWriteStream extends EventEmitter {
 
     this.injector.appendData(buffer);
   }
+
+  flush() {
+    this.injector.flush();
+  }
 }
 
 export class ChunkedWriteStreamInjector extends EventEmitter {
-  start() {
-    const data = Buffer.alloc(3500000 / 8);
+  start({
+    name = 'chunked-stream',
+    bitRate = 3500000,
+  }) {
+    this.name = name;
+
+    const data = Buffer.alloc(bitRate / 8);
     data.fill(255);
 
     Injector.create().then(injector => {
@@ -40,13 +49,17 @@ export class ChunkedWriteStreamInjector extends EventEmitter {
 
       const writer = new ChunkedWriteStream(injector);
       this.intervalId = setInterval(() => writer.write(data), 1000);
-      this.emit('publish', injector);
+      this.emit('publish', {
+        name,
+        contentType: 'application/octet-stream',
+        injector,
+      });
     });
   }
 
   stop(done) {
     clearInterval(this.intervalId);
-    this.emit('unpublish', this.injector);
+    this.emit('unpublish', {name: this.name, injector: this.injector});
     if (done) {
       setTimeout(done);
     }
@@ -69,9 +82,12 @@ class AbstractChunkedReadStream extends EventEmitter {
     this.swarm.on('data', this.handleWarmupSwarmData);
   }
 
-  handleWarmupSwarmData(data) {
+  handleWarmupSwarmData(data, offset = 0) {
+    let nextChunkOffset = offset;
+
     for (let i = 0; i < data.length; i ++) {
-      const delimiterIndex = data[i].indexOf(DELIMITER);
+      const delimiterIndex = data[i].indexOf(DELIMITER, nextChunkOffset);
+      nextChunkOffset = 0;
       if (delimiterIndex === -1 || delimiterIndex + HEADER_INSTANCE_LENGTH > data[i].length) {
         continue;
       }
@@ -113,7 +129,7 @@ class AbstractChunkedReadStream extends EventEmitter {
         this.swarm.on('data', this.handleWarmupSwarmData);
 
         this.chunkBufferLength = 0;
-        this.handleWarmupSwarmData(data.slice(i));
+        this.handleWarmupSwarmData(data.slice(i), lastChunkEnd);
         return;
       }
 
@@ -170,7 +186,7 @@ export class ChunkedReadStream extends AbstractChunkedReadStream {
     chunkSlice[chunkSlice.length - 1] = chunkSlice[chunkSlice.length - 1].slice(0, lastChunkEnd);
 
     let firstChunkStart = this.nextDataOffset;
-    if (firstChunkStart > chunkSlice[0].length) {
+    if (firstChunkStart >= chunkSlice[0].length) {
       firstChunkStart -= chunkSlice[0].length;
       chunkSlice.shift();
     }

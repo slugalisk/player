@@ -16,38 +16,56 @@ export default class Injector {
     this.swarm = swarm;
     this.chunkSize = chunkSize;
     this.chunksPerSignature = chunksPerSignature;
-    this.inputBuffer = Buffer.alloc(0);
-    this.chunkBuffer = [];
+    this.inputBuffer = [];
+    this.inputBufferSize = 0;
   }
 
   appendData(data) {
-    if (this.inputBuffer.length + data.length < this.chunkSize) {
-      this.inputBuffer = Buffer.concat([this.inputBuffer, data]);
+    this.inputBuffer.push(data);
+    this.inputBufferSize += data.length;
+
+    const signatureSize = this.chunkSize * this.chunksPerSignature;
+    if (this.inputBufferSize < signatureSize) {
       return;
     }
 
-    let dataOffset = 0;
-    if (this.inputBuffer.length > 0) {
-      dataOffset = this.chunkSize - this.inputBuffer.length;
-      this.chunkBuffer.push(Buffer.concat([this.inputBuffer, data.slice(0, dataOffset)], this.chunkSize));
+    let buf = Buffer.concat(this.inputBuffer);
+    while (buf.length > signatureSize) {
+      this.outputChunks(buf.slice(0, signatureSize));
+      buf = buf.slice(signatureSize);
     }
 
-    for (let i = dataOffset; i + this.chunkSize < data.length; i += this.chunkSize) {
-      this.chunkBuffer.push(data.slice(i, Math.min(data.length, i + this.chunkSize)));
-      dataOffset = i + this.chunkSize;
+    this.inputBuffer = [buf];
+    this.inputBufferSize = buf.length;
+  }
+
+  flush() {
+    if (this.inputBufferSize === 0) {
+      return;
     }
 
-    if (dataOffset < data.length) {
-      this.inputBuffer = data.slice(dataOffset);
+    const signatureSize = this.chunkSize * this.chunksPerSignature;
+    let buf = Buffer.concat(this.inputBuffer);
+    while (buf.length > 0) {
+      this.outputChunks(buf.slice(0, Math.min(buf.length, signatureSize)));
+      buf = buf.slice(signatureSize);
     }
 
-    while (this.chunkBuffer.length > this.chunksPerSignature) {
-      const subtreeChunks = this.chunkBuffer.splice(0, this.chunksPerSignature);
-      this.swarm.contentIntegrity.appendSubtree(subtreeChunks).then(subtree => {
-        this.swarm.chunkBuffer.setRange(subtree.rootAddress, subtreeChunks);
-        this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
-      });
+    this.inputBuffer = [];
+    this.inputBufferSize = 0;
+  }
+
+  outputChunks(buf) {
+    var chunks = [];
+    for (let i = 0; i < this.chunksPerSignature; i ++) {
+      const offset = i * this.chunkSize;
+      chunks.push(buf.slice(offset, offset + this.chunkSize));
     }
+
+    this.swarm.contentIntegrity.appendSubtree(chunks).then(subtree => {
+      this.swarm.chunkBuffer.setRange(subtree.rootAddress, chunks);
+      this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
+    });
   }
 
   static create(options = {}) {

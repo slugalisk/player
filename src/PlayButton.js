@@ -33,9 +33,12 @@ const PlayButton = ({
     }
   }, [hovering]);
 
+  const hidden = !visible && !currentVisibility;
+
   const hoverClasses = classNames({
     play_button_wrap: true,
     hovering: mouseIdle,
+    hidden,
     disabled,
   });
 
@@ -43,7 +46,7 @@ const PlayButton = ({
     play_button: true,
     clickable: onClick != null && !disabled,
     exiting: !visible && currentVisibility,
-    hidden: !visible && !currentVisibility,
+    hidden,
     spin,
     flicker,
     pulse,
