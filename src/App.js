@@ -2,6 +2,7 @@ import React, {useEffect, useState, useMemo, useRef} from 'react';
 import URI from './ppspp/uri';
 import DiagnosticMenu from './DiagnosticMenu';
 import SwarmPlayer from './SwarmPlayer';
+import {ChunkedReadStream} from './chunkedStream';
 import {Client} from './client';
 import {ConnManager} from './wrtc';
 import {PubSubConsumer} from './pubsub';
@@ -13,7 +14,7 @@ import moment from 'moment';
 
 import './App.scss';
 
-const getBootstrapAddress = () => {
+const getDefaultBootstrapAddress = () => {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = process.env.NODE_ENV === 'development'
     ? window.location.hostname + ':8080'
@@ -56,6 +57,12 @@ const useQuery = queryString => useMemo(() => {
 }, [queryString]);
 
 const NoiseLogger = ({swarm}) => {
+  useEffect(() => {
+    if (swarm) {
+      const stream = new ChunkedReadStream(swarm);
+      stream.on('data', ({length}) => console.log(`received ${length} bytes`));
+    }
+  }, [swarm]);
 
   return <DiagnosticMenu swarm={swarm} />;
 };
@@ -85,9 +92,9 @@ const useChatSwarm = client => {
       return;
     }
 
-    const handleMessage = ({message, time}) => setMessages(prev => ([
+    const handleMessage = message => setMessages(prev => ([
       ...prev.slice(prev.length > 100 ? 1 : 0),
-      {message, time},
+      message,
     ]));
 
     consumer.on('message', e => console.log(e));
@@ -111,7 +118,7 @@ const useChatSwarm = client => {
 const ChatMessages = ({messages}) => {
   const items = messages.map(({time, message, id}) => (
     <li className="message" key={id}>
-      <span className="timestamp" title={time}>{moment(new Date(time)).format('HH:MM:SS')}</span>
+      <span className="timestamp" title={time}>{moment(time).format('HH:mm:ss')}</span>
       <span className="text">{message}</span>
     </li>
   )).reverse();
@@ -163,20 +170,23 @@ const App = ({
 }) => {
   const query = useQuery(location.search);
   const autoPlay = 'autoplay' in query;
-  const bootstrapAddress = query.bootstrap;
+  const bootstrapAddress = query.bootstrap || getDefaultBootstrapAddress();
   const swarmName = params.name;
 
   const clientTimeout = useTimeout(clientTimeoutMs);
   const {
+    loading: clientLoading,
     error: clientError,
     value: client,
-  } = useAsync(() => Client.create(new ConnManager(bootstrapAddress || getBootstrapAddress())), []);
+  } = useAsync(() =>  Client.create(new ConnManager(bootstrapAddress)), []);
 
-  const [index, indexSwarm] = useIndexSwarm(client);
+  const index = null;
+  const indexSwarm = null;
+  // const [index, indexSwarm] = useIndexSwarm(client);
   const [swarm, joinSwarm] = useSwarm(client);
 
   const swarmDesc = client?.bootstrap.swarms.find(desc => desc.name === swarmName);
-  const loading = !swarmDesc;
+  const error = clientError || (autoPlay && clientTimeout) || !(clientLoading || swarmDesc);
 
   useEffect(() => {
     if (autoPlay && swarmDesc) {
@@ -201,20 +211,21 @@ const App = ({
   }
 
   const indexSwarmDiagnosticMenu = indexSwarm && <DiagnosticMenu swarm={indexSwarm} />;
+  const chat = 'chat' in query && <Chat client={client} />;
 
   return (
     <>
-      <Chat client={client} />
+      {chat}
       {indexSwarmDiagnosticMenu}
       <div className="idle">
         <div className="noise"></div>
       </div>
       <PlayButton
-        disabled={loading}
+        disabled={clientLoading || autoPlay || error}
         onClick={() => joinSwarm(swarmDesc.uri)}
-        pulse={!autoPlay}
-        flicker={loading || autoPlay}
-        error={loading && (clientTimeout || clientError)}
+        pulse={!clientLoading && !autoPlay}
+        flicker={clientLoading || autoPlay}
+        error={error}
         blur
       />
     </>

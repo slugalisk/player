@@ -187,12 +187,12 @@ const useVideo = () => {
     setReadyState(ref.current.readyState);
   };
 
-  const onTimeUpdate = () => {
-    console.log({
-      buffered: ref.current.buffered,
-      seekable: ref.current.seekable,
-    });
-  };
+  // const onTimeUpdate = () => {
+  //   console.log({
+  //     buffered: ref.current.buffered,
+  //     seekable: ref.current.seekable,
+  //   });
+  // };
 
   const play = async () => {
     try {
@@ -238,7 +238,7 @@ const useVideo = () => {
   ];
 };
 
-const SwarmPlayer = ({swarm}) =>{
+const SwarmPlayer = ({swarm, indexSwarm}) =>{
   const [videoState, videoProps, videoControls] = useVideo();
   const mediaSource = useSwarmMediaSource(swarm);
 
@@ -268,6 +268,7 @@ const SwarmPlayer = ({swarm}) =>{
 
   return (
     <React.Fragment>
+      {/* <DiagnosticMenu swarm={indexSwarm} containerClass="diagnostic-menu--indent-1" /> */}
       <DiagnosticMenu swarm={swarm} />
       <video
         onClick={e => e.preventDefault()}

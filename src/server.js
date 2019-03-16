@@ -119,7 +119,10 @@ const registerInjector = factory => {
   });
 };
 
-const nginxInjector = new NginxInjector();
+const nginxInjector = new NginxInjector({
+  chunkSize: 32 * 1024,
+  chunksPerSignature: 16,
+});
 const noiseInjector = new ChunkedWriteStreamInjector();
 const pubSubInjector = new pubsub.Injector();
 
@@ -151,7 +154,13 @@ dhtClient.on('receive.chat.message', ({data}) => {
 
 nginxInjector.start();
 
-noiseInjector.start({name: 'noise', bitRate: 3500000});
+// noiseInjector.start({name: 'noise', bitRate: 3500000});
+noiseInjector.start({
+  name: 'noise',
+  bitRate: 9000000,
+  chunkSize: 32 * 1024,
+  chunksPerSignature: 16,
+});
 
 const shutdown = (signal = 'SIGTERM') => {
   const close = (close, message) => new Promise(resolve => close(resolve)).then(() => console.log(message));

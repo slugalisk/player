@@ -10,6 +10,7 @@ const Router = () => (
       <Route exact path="/test" component={Test} />
       <Route exact path="/dht-graph" component={DhtGraph} />
       <Route exact path="/:name([\w\-]*)" component={App} />
+      <Redirect to="/" />
     </Switch>
   </HashRouter>
 );

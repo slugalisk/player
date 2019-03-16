@@ -38,14 +38,18 @@ export default class RingBuffer {
     this.values[index % this.capacity] = value;
   }
 
-  get(index) {
-    if (index < this.lastIndex - this.capacity || index >= this.lastIndex) {
-      return undefined;
-    }
-    return this.values[index % this.capacity];
-  }
-
   push(value) {
     this.set(this.lastIndex, value);
+  }
+
+  get firstIndex() {
+    return this.lastIndex - this.capacity;
+  }
+
+  get(index) {
+    if (index < this.firstIndex || index >= this.lastIndex) {
+      return this.createEmptyValue(index);
+    }
+    return this.values[index % this.capacity];
   }
 }

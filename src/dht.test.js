@@ -31,7 +31,7 @@ it('dht clients can process messages in busy clusters', async () => {
   ));
   const dhtClients = clients.map(({dhtClient}) => dhtClient);
 
-  dhtClients.map(client => client.on('receive.test', ({callback}) => callback()));
+  dhtClients.forEach(client => client.on('receive.test', ({callback}) => callback()));
 
   await new Promise(resolve => setTimeout(resolve, 1000))
     .then(() => Promise.all(pairs.map(({src, dst}) => new Promise(

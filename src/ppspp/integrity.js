@@ -194,12 +194,25 @@ export const createContentIntegrityVerifierFactory = (
   }
 
   class MerkleHashTree {
-    constructor(rootAddress, signatures = new Array(rootAddress.getChunkCount() * 2 - 1)) {
+    constructor(rootAddress = new Address(0), signatures = new Array(rootAddress.getChunkCount() * 2 - 1)) {
       this.rootAddress = rootAddress;
       this.signatures = signatures;
     }
 
-    createVerifier() {
+    createVerifier(address) {
+      if (address.contains(this.rootAddress)) {
+        const {signatures} = this;
+
+        this.rootAddress = address;
+        this.signatures = new Array(address.getChunkCount() * 2 - 1);
+
+        for (let i = 0; i < signatures.length; i ++) {
+          if (signatures[i] !== undefined) {
+            this.signatures[i] = signatures[i];
+          }
+        }
+      }
+
       return new MerkleHashTreeVerifier(this);
     }
 
@@ -223,7 +236,6 @@ export const createContentIntegrityVerifierFactory = (
       const {start} = this.rootAddress;
       bin -= start;
 
-      const bins = [];
       let bfsIndex = this.rootAddress.getChunkCount() + bin / 2 - 1;
       let stride = 2;
       let parent = bin;
@@ -253,8 +265,6 @@ export const createContentIntegrityVerifierFactory = (
         siblingBin: parent + start,
         siblingBfsIndex: 0,
       };
-
-      return bins;
     }
 
     getConstituentSignatures(address) {
@@ -346,8 +356,9 @@ export const createContentIntegrityVerifierFactory = (
           });
 
           const siblingHash = siblingSignature.getHash();
-          const siblings = bin.branch === 1 ? [hash, siblingHash] : [siblingHash, hash];
-          return merkleHashTreeFunction(...siblings);
+          return bin.branch === 1
+            ? merkleHashTreeFunction(hash, siblingHash)
+            : merkleHashTreeFunction(siblingHash, hash);
         });
       }
 

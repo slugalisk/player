@@ -9,10 +9,11 @@ import {EventEmitter} from 'events';
 import {ChunkedWriteStream} from './chunkedStream';
 
 export default class NginxInjector extends EventEmitter {
-  constructor() {
+  constructor(options) {
     super();
     this.injectors = {};
     this.writers = {};
+    this.options = options;
   }
 
   handleConnect(req, res) {
@@ -26,7 +27,7 @@ export default class NginxInjector extends EventEmitter {
 
   handlePublish(req, res) {
     console.log('handlePublish', req.body);
-    Injector.create().then(injector => {
+    Injector.create(this.options).then(injector => {
       // res.status(200).send('');
       res.redirect('memes');
 

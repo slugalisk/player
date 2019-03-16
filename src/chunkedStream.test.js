@@ -61,20 +61,3 @@ const runCopyTest = (expectedCount, chunkSize, relayChunkSize) => {
 it('can copy data with multiple chunks per message', () => runCopyTest(10, 2048, 128));
 
 it('can copy data with multiple messages per chunk', () => runCopyTest(10, 128, 2048));
-
-it ('does this one thing', () => {
-  const reader = Object.create(chunkedStream.ChunkedReadStream.prototype);
-  reader.chunkBuffer = [];
-  reader.chunkBufferLength = 256;
-  reader.nexDataLength = 34;
-  reader.nextDataOffset = 222;
-
-  reader.on('data', data => {
-    console.log(Buffer.concat(data.chunks).toString());
-  });
-
-  const data = Uint8Array.from([102, 1, 0, 0, 0, 34, 123, 34, 116, 121, 112, 101, 34, 58, 34, 72, 69, 65, 82, 84, 66, 69, 65, 84, 34, 44, 34, 115, 101, 113, 117, 101, 110, 99, 101, 34, 58, 52, 50, 125, 76, 147, 191, 0, 174, 19, 195, 126, 93, 243, 183, 169, 206, 160, 65, 53, 33, 254, 27, 8, 166, 39, 208, 101, 215, 24, 11, 157, 7, 56, 198, 102, 0, 0, 0, 0, 34, 76, 147, 191, 0, 174, 19, 195, 126, 93, 243, 183, 169, 206, 160, 65, 53, 33, 254, 27, 8, 166, 39, 208, 101, 215, 24, 11, 157, 7, 56, 198, 102, 1, 0, 0, 0, 34, 123, 34, 116, 121, 112, 101, 34, 58, 34, 72, 69, 65, 82, 84, 66, 69, 65, 84, 34, 44, 34, 115, 101, 113, 117, 101, 110, 99, 101, 34, 58, 52, 51, 125, 76, 147, 191, 0, 174, 19, 195, 126, 93, 243, 183, 169, 206, 160, 65, 53, 33, 254, 27, 8, 166, 39, 208, 101, 215, 24, 11, 157, 7, 56, 198, 102, 0, 0, 0, 0, 34, 76, 147, 191, 0, 174, 19, 195, 126, 93, 243, 183, 169, 206, 160, 65, 53, 33, 254, 27, 8, 166, 39, 208, 101, 215, 24, 11, 157, 7, 56, 198, 102, 1, 0, 0, 0, 34, 76, 147, 191, 0, 174, 19, 195, 126, 93, 243, 183, 169, 206, 160, 65, 53, 33, 254, 27, 8, 166, 39, 208, 101, 215, 24, 11, 157, 7, 56, 198, 102, 0, 0]);
-  const lastChunkEnd = 256;
-
-  reader.handleEndData(data, lastChunkEnd);
-});

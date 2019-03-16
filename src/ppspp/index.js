@@ -100,8 +100,10 @@ export class Swarm extends EventEmitter {
       const chunks = [];
       for (let i = minNewBin; i <= maxNewBin; i += 2) {
         const chunk = this.chunkBuffer.get(new Address(i));
+
         if (chunk === undefined) {
-          debugger;
+          // debugger;
+          continue;
         }
         chunks.push(chunk);
       }

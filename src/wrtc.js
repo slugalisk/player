@@ -14,6 +14,7 @@ export class ConnManager {
   bootstrap() {
     return new Promise((resolve, reject) => {
       const conn = new WebSocket(this.bootstrapAddress);
+      conn.onerror = reject;
       conn.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'bootstrap') {

@@ -374,15 +374,15 @@ export class Client extends EventEmitter {
     }
 
     if (closest.length === 0) {
-      console.warn(`closest value to ${arrayBufferToHex(to)} does not exist, dropping`, message);
+      // console.warn(`closest value to ${arrayBufferToHex(to)} does not exist, dropping`, message);
       return;
     }
 
     if (arrayEqual(closest[0].id, to)) {
       closest = closest.slice(0, 1);
     }
-    console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
-    console.log(closest.length, closest.filter(({conn}) => !!conn).length, message);
+    // console.log('send', closest.map(({id}) => arrayBufferToHex(id)), message);
+    // console.log(closest.length, closest.filter(({conn}) => !!conn).length, message);
     closest.forEach(({id, conn}) => {
       try {
         // console.log('buffered amount before send', conn.bufferedAmount);

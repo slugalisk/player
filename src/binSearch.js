@@ -4,7 +4,7 @@ export default function binSearch(max, comparator) {
 
   while (left <= right) {
     const mid = left + Math.floor((right - left) / 2);
-    const order = comparator(mid);
+    const order = comparator(mid, left, right);
 
     if (order < 0) {
       left = mid + 1;

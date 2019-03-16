@@ -38,13 +38,14 @@ export class ChunkedWriteStreamInjector extends EventEmitter {
   start({
     name = 'chunked-stream',
     bitRate = 3500000,
+    ...injectorOptions
   }) {
     this.name = name;
 
     const data = Buffer.alloc(bitRate / 8);
     data.fill(255);
 
-    Injector.create().then(injector => {
+    Injector.create(injectorOptions).then(injector => {
       this.injector = injector;
 
       const writer = new ChunkedWriteStream(injector);

@@ -29,7 +29,7 @@ export default class Injector {
       return;
     }
 
-    let buf = Buffer.concat(this.inputBuffer);
+    let buf = Buffer.concat(this.inputBuffer, this.inputBufferSize);
     while (buf.length > signatureSize) {
       this.outputChunks(buf.slice(0, signatureSize));
       buf = buf.slice(signatureSize);
@@ -45,7 +45,7 @@ export default class Injector {
     }
 
     const signatureSize = this.chunkSize * this.chunksPerSignature;
-    let buf = Buffer.concat(this.inputBuffer);
+    let buf = Buffer.concat(this.inputBuffer, this.inputBufferSize);
     while (buf.length > 0) {
       this.outputChunks(buf.slice(0, Math.min(buf.length, signatureSize)));
       buf = buf.slice(signatureSize);

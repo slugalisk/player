@@ -4,6 +4,9 @@ import wfq from '../wfq';
 import EMA from '../ema';
 import LEDBAT from '../ledbat';
 import RingBuffer from '../RingBuffer';
+import fenwick from 'fenwick-tree';
+import binSearch from '../binSearch';
+import TinyQeueue from 'tinyqueue';
 
 export class AvailabilityMap {
   constructor(capacity) {
@@ -62,6 +65,100 @@ export class BinRingBuffer extends RingBuffer {
         break;
       }
     }
+  }
+}
+
+export class ScarcityMap {
+  constructor(capacity) {
+    this.capacity = Math.pow(2, Math.ceil(Math.log2(capacity)));
+    this.left = new Uint32Array(this.capacity).fill(0);
+    this.right = new Uint32Array(this.capacity).fill(0);
+    this.leftOffset = 0;
+    this.leftTotal = 0;
+    this.rightTotal = 0;
+  }
+
+  get rightOffset() {
+    return this.leftOffset + this.capacity;
+  }
+
+  get rolloverThreshold() {
+    return this.leftOffset + this.capacity * 2;
+  }
+
+  get purgeThreshold() {
+    return this.leftOffset + this.capacity * 3;
+  }
+
+  update(index, value) {
+    if (index > this.purgeThreshold) {
+      this.leftOffset = index;
+      this.left.fill(0);
+      this.right.fill(0);
+      this.leftTotal = this.rightTotal = 0;
+    }
+
+    if (index > this.rolloverThreshold) {
+      this.leftOffset += this.capacity;
+      [this.left, this.right] = [this.left, this.right];
+      this.right.fill(0);
+      this.leftTotal = this.rightTotal;
+      this.rightTotal = 0;
+    }
+
+    if (index >= this.rightOffset) {
+      fenwick.update(this.right, index - this.rightOffset, value);
+      this.rightTotal += value;
+    } else if (index >= this.leftOffset) {
+      fenwick.update(this.left, index - this.leftOffset, value);
+      this.leftTotal += value;
+    }
+  }
+
+  query(index) {
+    if (index >= this.rolloverThreshold) {
+      return this.leftTotal + this.rightTotal;
+    } else if (index >= this.rightOffset) {
+      return this.leftTotal + fenwick.query(this.right, index - this.rightOffset);
+    } else if (index >= this.leftOffset) {
+      return fenwick.query(this.left, index - this.leftOffset);
+    }
+    return 0;
+  }
+
+  queryRange(start, end) {
+    return this.query(end) - this.query(start - 1);
+  }
+
+  findSmallValue(fuzz = 0) {
+    const index = binSearch(
+      this.rolloverThreshold - this.leftOffset,
+      (mid, left, right) => {
+        const leftSum = this.queryRange(left, mid - 1);
+        const rightSum = this.queryRange(mid, right);
+
+        if (leftSum === rightSum) return 0;
+        if (leftSum === 0) return 1;
+        if (rightSum === 0) return -1;
+        return (rightSum - leftSum) * (Math.random() < fuzz ? -1 : 1);
+      },
+    );
+
+    return index * 2;
+  }
+}
+
+export class BinScarcityMap {
+  constructor(capacity) {
+    this.map = new ScarcityMap(capacity);
+  }
+
+  update({bin}, value) {
+    this.map.update(bin / 2, value);
+  }
+
+  findBin() {
+    return this.map.findSmallValue(0.02) * 2;
   }
 }
 
@@ -351,7 +448,7 @@ export class Scheduler {
     // minimum needed bin
 
     this.peerStates = {};
-    this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
+    // this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
     this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
     this.peerCount = 0;
 
@@ -367,6 +464,11 @@ export class Scheduler {
     this.lastExportedBin = -Infinity;
     this.lastCompletedBin = -Infinity;
     this.requestedChunks = new AvailabilityMap(liveDiscardWindow);
+
+    this.scarcityMap = new BinScarcityMap(liveDiscardWindow);
+    this.binQueue = new TinyQeueue([], (a, b) => {
+      return a.bin - b.bin;
+    });
 
     this.totalSends = 0;
     this.totalRequests = 0;
@@ -506,17 +608,51 @@ export class Scheduler {
 
     ledbat.digestDelaySamples();
 
+    const requestAddresses = [];
+
     const startBin = Math.max(
       this.loadedChunks.values.offset * 2 + 2,
       this.requestedChunks.values.offset * 2 + 2,
       availableChunks.min(),
       this.lastCompletedBin,
     );
+
+    // TODO: how to pick this...?
+    const urgentBinThreshold = this.lastCompletedBin + 8;
+
+    const peekNextQueueBin = () => {
+      /* eslint-disable-next-line */
+      while (true) {
+        let priorityBin = this.binQueue.peek();
+        if (priorityBin === undefined) {
+          return;
+        }
+
+        if (this.loadedChunks.get(priorityBin)
+          || this.requestedChunks.get(priorityBin)
+          || priorityBin.bin < startBin) {
+          this.binQueue.pop();
+          continue;
+        }
+
+        return priorityBin;
+      }
+    };
+
+    let priorityBin = peekNextQueueBin();
+    while (priorityBin && priorityBin.bin < urgentBinThreshold && requestAddresses.length < cwnd) {
+      const address = this.binQueue.pop();
+      requestAddresses.push(address);
+      sentRequests.insert(address);
+      this.requestedChunks.set(address);
+
+      priorityBin = peekNextQueueBin();
+    }
+
     const endBin = Math.min(
       startBin + this.liveDiscardWindow * 2,
       availableChunks.max(),
     );
-    const requestAddresses = [];
     for (let i = startBin; i < endBin && requestAddresses.length < cwnd; i += 2) {
       const address = new Address(i);
       if (!this.loadedChunks.get(address)
@@ -530,6 +666,24 @@ export class Scheduler {
         }
       }
     }
+
+    // while (requestAddresses.length < cwnd) {
+    //   const address = this.binQueue.pop();
+    //   if (address === undefined) {
+    //     break;
+    //   }
+
+    //   // const address = new Address(i);
+    //   if (!this.loadedChunks.get(address)
+    //     && !this.requestedChunks.get(address)
+    //     && availableChunks.get(address)) {
+
+    //     requestAddresses.push(address);
+    //     sentRequests.insert(address);
+    //     this.requestedChunks.set(address);
+    //   }
+    // }
+
     if (this.lastCompletedBin === -Infinity && requestAddresses.length !== 0) {
       const firstRequestedBin = requestAddresses[0].bin;
       this.lastCompletedBin = firstRequestedBin;
@@ -619,8 +773,8 @@ export class Scheduler {
 
   getRecentChunks() {
     // TODO: how to pick this... maybe remote discard window size?
-    const startBin = this.loadedChunks.max();
-    // const startBin = this.loadedChunks.max() - 64;
+    // const startBin = this.loadedChunks.max();
+    const startBin = this.loadedChunks.max() - 31;
 
     // bail if no chunks have been loaded yet
     if (!isFinite(startBin)) {
@@ -726,7 +880,12 @@ export class Scheduler {
 
   markChunkAvailable(peer, address) {
     for (let i = address.start; i <= address.end; i += 2) {
-      if (!this.getPeerState(peer).availableChunks.get(new Address(i))) {
+      const address = new Address(i);
+
+      this.binQueue.push(address);
+      this.scarcityMap.update(address, 1);
+
+      if (!this.getPeerState(peer).availableChunks.get(address)) {
         this.totalAdded ++;
       }
     }
@@ -735,7 +894,7 @@ export class Scheduler {
   }
 
   markChunksLoaded(address) {
-    this.chunkStates.advanceLastBin(address.end);
+    // this.chunkStates.advanceLastBin(address.end);
     this.loadedChunks.set(address);
 
     Object.values(this.peerStates).forEach(({availableChunks, peer}) => {
