@@ -100,16 +100,12 @@ it('setRange with large range when wrapping', () => {
 
   b.setRange(6528, 6592);
   expect(b.toValueArray()).toEqual((new Array(64).fill()).map((_, i) => i + 6528));
-});
-
-it('setRange some other shit', () => {
-  let b = new BitArray(6563);
 
   b.setRange(52544, 52608);
   expect(b.toValueArray()).toEqual((new Array(64).fill()).map((_, i) => i + 52544));
 });
 
-it ('get', () => {
+it('get', () => {
   const b = new BitArray(64);
 
   b.set(1);
@@ -124,7 +120,7 @@ it ('get', () => {
   expect(b.get(100000)).toEqual(true);
 });
 
-it ('min', () => {
+it('min', () => {
   const b = new BitArray(64);
 
   b.set(1);
@@ -140,7 +136,7 @@ it ('min', () => {
   expect(b.min()).toEqual(63);
 });
 
-it ('max', () => {
+it('max', () => {
   const b = new BitArray(64);
 
   b.set(1);
@@ -150,7 +146,16 @@ it ('max', () => {
   expect(b.max()).toEqual(100000);
 });
 
-it ('getIndexValue', () => {
+it('max after wrapping with odd capacity', () => {
+  const b = new BitArray(1641);
+
+  for (let i = 1; i < 10000; i += 100) {
+    b.set(i, true);
+    expect(b.max()).toEqual(i);
+  }
+});
+
+it('getIndexValue', () => {
   const b = new BitArray(64);
 
   expect(b.getIndexValue(0, 0)).toEqual(0);

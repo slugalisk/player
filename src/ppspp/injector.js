@@ -18,6 +18,7 @@ export default class Injector {
     this.chunksPerSignature = chunksPerSignature;
     this.inputBuffer = [];
     this.inputBufferSize = 0;
+    this.outputResult = Promise.resolve();
   }
 
   appendData(data) {
@@ -62,7 +63,10 @@ export default class Injector {
       chunks.push(buf.slice(offset, offset + this.chunkSize));
     }
 
-    this.swarm.contentIntegrity.appendSubtree(chunks).then(subtree => {
+    this.outputResult = Promise.all([
+      this.swarm.contentIntegrity.appendSubtree(chunks),
+      this.outputResult,
+    ]).then(([subtree]) => {
       this.swarm.chunkBuffer.setRange(subtree.rootAddress, chunks);
       this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
     });

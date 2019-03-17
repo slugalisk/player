@@ -14,16 +14,18 @@ const App = () => {
   useEffect(() => {
     const injector = new ChunkedWriteStreamInjector();
 
-    injector.on('publish', ({swarm}) => {
+    injector.on('publish', ({injector: {swarm}}) => {
       setSwarmUri(swarm.uri);
       server.ppsppClient.publishSwarm(swarm);
     });
 
-    injector.on('unpublish', ({swarm}) => {
+    injector.on('unpublish', ({injector: {swarm}}) => {
       server.ppsppClient.unpublishSwarm(swarm);
     });
 
-    injector.start();
+    injector.start({
+      bitRate: 9000000,
+    });
 
     return () => injector.stop();
   }, []);

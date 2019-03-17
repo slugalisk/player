@@ -146,7 +146,7 @@ export default class BitArray {
   }
 
   min() {
-    for (let i = this.offset; i <= this.offset + this.capacity; i += 8) {
+    for (let i = this.offset; i <= this.offset + this.values.length * 8; i += 8) {
       if (this.values[this.getByteIndex(i)] !== 0) {
         const firstBit = Math.floor(i / 8) * 8;
         for (let j = firstBit; j < firstBit + 8; j ++) {
@@ -160,9 +160,9 @@ export default class BitArray {
   }
 
   max() {
-    for (let i = this.capacity + this.offset; i >= this.offset; i -= 8) {
+    for (let i = this.values.length * 8 + this.offset; i >= this.offset; i -= 8) {
       if (this.values[this.getByteIndex(i)] !== 0) {
-        const lastBit = Math.ceil(i / 8) * 8 + 1;
+        const lastBit = Math.ceil((i + 1) / 8) * 8;
         for (let j = lastBit; j > lastBit - 8; j --) {
           if (this.get(j)) {
             return j;

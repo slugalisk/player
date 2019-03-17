@@ -19,26 +19,6 @@ it('dht clients can send and receive messages', async () => {
     ))));
 });
 
-it('dht clients can process messages in busy clusters', async () => {
-  jest.setTimeout(10000);
-
-  const indices = new Array(20).fill(0).map((_, i) => i);
-  const pairs = indices.reduce((pairs, src) => pairs.concat(indices.filter(i => i !== src).map(dst => ({src, dst}))), []);
-
-  const server = new Server();
-  const clients = await Promise.all(indices.map((_, i) => new Promise(
-    resolve => setTimeout(() => resolve(Client.create(new ConnManager(server))), 50 * i)),
-  ));
-  const dhtClients = clients.map(({dhtClient}) => dhtClient);
-
-  dhtClients.forEach(client => client.on('receive.test', ({callback}) => callback()));
-
-  await new Promise(resolve => setTimeout(resolve, 1000))
-    .then(() => Promise.all(pairs.map(({src, dst}) => new Promise(
-      resolve => dhtClients[src].send(dhtClients[dst].id, 'test', {src, dst}, resolve),
-    ))));
-});
-
 it('dht clients can respond to messages via callbacks', async () => {
   const indices = new Array(3).fill(0).map((_, i) => i);
   const pairs = indices.reduce((pairs, src) => pairs.concat(indices.filter(i => i !== src).map(dst => ({src, dst}))), []);

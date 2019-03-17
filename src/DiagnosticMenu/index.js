@@ -81,7 +81,7 @@ class SwarmState extends Component {
       },
       {
         key: 'chunkRate',
-        value: formatNumber(scheduler.chunkRate.value()),
+        value: formatNumber(scheduler.chunkRate.value() * 1000) + '/s',
       },
     ];
 
@@ -115,11 +115,11 @@ class PeerStateTable extends Component {
       },
       {
         key: 'wasteRate',
-        value: formatNumber(peerState.wasteRate.value()),
+        value: formatNumber(peerState.wasteRate.value() * 1000) + '/s',
       },
       {
         key: 'chunkRate',
-        value: formatNumber(peerState.chunkRate.value()),
+        value: formatNumber(peerState.chunkRate.value() * 1000) + '/s',
       },
       {
         key: 'ledbat.baseDelay',

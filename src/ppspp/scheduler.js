@@ -6,7 +6,7 @@ import LEDBAT from '../ledbat';
 import RingBuffer from '../RingBuffer';
 import fenwick from 'fenwick-tree';
 import binSearch from '../binSearch';
-import TinyQeueue from 'tinyqueue';
+// import TinyQeueue from 'tinyqueue';
 
 export class AvailabilityMap {
   constructor(capacity) {
@@ -297,7 +297,7 @@ export class SchedulerChunkRequestMap {
 
     for (let i = address.start; i <= address.end; i += 2) {
       const value = {
-        address: new Address(i),
+        address: new Address(i, [i, i]),
         createdAt: now,
         next: undefined,
         prev: undefined,
@@ -428,25 +428,6 @@ export class Scheduler {
     this.chunkSize = chunkSize;
     this.liveDiscardWindow = liveDiscardWindow;
 
-    // where are we in the buffer
-
-    // how rare is a chunk
-    // how urgently is a chunk needed
-
-    // high/mid/low priority time bands
-
-    // high performance/reliability peers
-    // expected performance per peer
-
-    // request timeout/cancel
-    // send timeout/cancel?
-
-    // average stream bit rate
-    // position in available window
-    // position in theoretical window
-
-    // minimum needed bin
-
     this.peerStates = {};
     // this.chunkStates = new SchedulerChunkMap(liveDiscardWindow);
     this.loadedChunks = new AvailabilityMap(liveDiscardWindow);
@@ -456,19 +437,21 @@ export class Scheduler {
 
     this.requestQueue = new RequestQueue(uploadRateLimit / 1000);
 
-    // this.update = this.update.bind(this);
-    // setTimeout(this.update, 0);
-
     this.timers = {};
 
     this.lastExportedBin = -Infinity;
     this.lastCompletedBin = -Infinity;
     this.requestedChunks = new AvailabilityMap(liveDiscardWindow);
 
-    this.scarcityMap = new BinScarcityMap(liveDiscardWindow);
-    this.binQueue = new TinyQeueue([], (a, b) => {
-      return a.bin - b.bin;
-    });
+    // this.scarcityMap = new BinScarcityMap(liveDiscardWindow);
+    // this.binQueue = new TinyQeueue([], (a, b) => {
+    //   return a.bin - b.bin;
+    // });
+
+    // TODO: up/down regulate when we're downloading slower or faster than the
+    // stream's average bit rate?
+    this.priorityBinThreshold = 4;
+    // window.setUrgencyThreshold = v => this.priorityBinThreshold = v;
 
     this.totalSends = 0;
     this.totalRequests = 0;
@@ -493,7 +476,7 @@ export class Scheduler {
       }
 
       let cto = peerState.ledbat.cto / (peerState.ledbat.cwnd / this.chunkSize);
-      const timeout = Math.ceil(Math.min(cto, 1000));
+      const timeout = Math.min(cto, 1000);
 
       const availableChunks = peerState.availableChunks;
 
@@ -582,7 +565,7 @@ export class Scheduler {
     // const planFor = ledbat.rttMean.value();
     // const planFor = ledbat.rttMean.value() * 2 + ledbat.rttVar.value() * 4;
     const planFor = Math.max(1000, ledbat.rttMean.value() * 4);
-    const timeoutThreshold = now - ledbat.cto * 2;
+    const timeoutThreshold = now - Math.min(1000, ledbat.cto) * 2;
 
     const dip = peerState.chunkIntervalMean.value() || 0;
     const firstPlanPick = dip === 0 ? 1 : Math.max(1, planFor / dip);
@@ -601,7 +584,6 @@ export class Scheduler {
         sentRequests.remove(address);
       });
 
-      // TODO: this is for ack timeout
       ledbat.onDataLoss(cancelledRequests.length * this.chunkSize);
       // console.log(cancelledRequests);
     }
@@ -616,73 +598,25 @@ export class Scheduler {
       availableChunks.min(),
       this.lastCompletedBin,
     );
-
-    // TODO: how to pick this...?
-    const urgentBinThreshold = this.lastCompletedBin + 8;
-
-    const peekNextQueueBin = () => {
-      /* eslint-disable-next-line */
-      while (true) {
-        let priorityBin = this.binQueue.peek();
-        if (priorityBin === undefined) {
-          return;
-        }
-
-        if (this.loadedChunks.get(priorityBin)
-          || this.requestedChunks.get(priorityBin)
-          || priorityBin.bin < startBin) {
-          this.binQueue.pop();
-          continue;
-        }
-
-        return priorityBin;
-      }
-    };
-
-    let priorityBin = peekNextQueueBin();
-    while (priorityBin && priorityBin.bin < urgentBinThreshold && requestAddresses.length < cwnd) {
-      const address = this.binQueue.pop();
-      requestAddresses.push(address);
-      sentRequests.insert(address);
-      this.requestedChunks.set(address);
-
-      priorityBin = peekNextQueueBin();
-    }
-
     const endBin = Math.min(
       startBin + this.liveDiscardWindow * 2,
       availableChunks.max(),
     );
+    const priorityBinThreshold = this.lastCompletedBin + this.priorityBinThreshold;
+
     for (let i = startBin; i < endBin && requestAddresses.length < cwnd; i += 2) {
-      const address = new Address(i);
+      const address = new Address(i, [i, i]);
       if (!this.loadedChunks.get(address)
         && !this.requestedChunks.get(address)
         && availableChunks.get(address)) {
 
-        if (Math.random() < 0.05) {
+        if (address.bin < priorityBinThreshold || Math.random() < 0.1) {
           requestAddresses.push(address);
           sentRequests.insert(address);
           this.requestedChunks.set(address);
         }
       }
     }
-
-    // while (requestAddresses.length < cwnd) {
-    //   const address = this.binQueue.pop();
-    //   if (address === undefined) {
-    //     break;
-    //   }
-
-    //   // const address = new Address(i);
-    //   if (!this.loadedChunks.get(address)
-    //     && !this.requestedChunks.get(address)
-    //     && availableChunks.get(address)) {
-
-    //     requestAddresses.push(address);
-    //     sentRequests.insert(address);
-    //     this.requestedChunks.set(address);
-    //   }
-    // }
 
     if (this.lastCompletedBin === -Infinity && requestAddresses.length !== 0) {
       const firstRequestedBin = requestAddresses[0].bin;
@@ -774,7 +708,8 @@ export class Scheduler {
   getRecentChunks() {
     // TODO: how to pick this... maybe remote discard window size?
     // const startBin = this.loadedChunks.max();
-    const startBin = this.loadedChunks.max() - 31;
+    // const startBin = this.loadedChunks.max() - 32;
+    const startBin = this.lastCompletedBin;
 
     // bail if no chunks have been loaded yet
     if (!isFinite(startBin)) {
@@ -854,7 +789,7 @@ export class Scheduler {
     this.chunkRate.update(address);
     this.loadedChunks.set(address);
 
-    for (let i = this.lastCompletedBin; this.loadedChunks.get(new Address(i)); i += 2) {
+    for (let i = this.lastCompletedBin; this.loadedChunks.get(new Address(i, [i, i])); i += 2) {
       this.lastCompletedBin = i;
     }
 
@@ -878,12 +813,13 @@ export class Scheduler {
     this.getPeerState(peer).invalidChunks ++;
   }
 
+  // mark an address available from a peer (HAVE)
   markChunkAvailable(peer, address) {
     for (let i = address.start; i <= address.end; i += 2) {
-      const address = new Address(i);
+      const address = new Address(i, [i, i]);
 
-      this.binQueue.push(address);
-      this.scarcityMap.update(address, 1);
+      // this.binQueue.push(address);
+      // this.scarcityMap.update(address, 1);
 
       if (!this.getPeerState(peer).availableChunks.get(address)) {
         this.totalAdded ++;
@@ -893,9 +829,10 @@ export class Scheduler {
     this.getPeerState(peer).availableChunks.set(address);
   }
 
+  // mark an address where chunks have been manually added ie. by an injector
   markChunksLoaded(address) {
-    // this.chunkStates.advanceLastBin(address.end);
     this.loadedChunks.set(address);
+    this.lastCompletedBin = address.start;
 
     Object.values(this.peerStates).forEach(({availableChunks, peer}) => {
       if (!availableChunks.get(address) && peer.isReady()) {
@@ -928,7 +865,7 @@ export class Scheduler {
 
     for (let i = address.start; i <= address.end; i += 2) {
       this.totalRequestsReceived ++;
-      peerState.requestQueue.push(new Address(i));
+      peerState.requestQueue.push(new Address(i, [i, i]));
     }
 
     peerState.requestedChunks.insert(address);
