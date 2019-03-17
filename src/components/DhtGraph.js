@@ -1,6 +1,6 @@
 import React, {useEffect, useReducer, useState} from 'react';
-import {Server, ConnManager} from './loopback';
-import {Client} from './client';
+import {Server, ConnManager} from '../loopback';
+import {Client} from '../client';
 import arrayBufferToHex from 'array-buffer-to-hex';
 import ForceGraph3D from 'react-force-graph-3d';
 import {schemeCategory10} from 'd3-scale-chromatic';
@@ -74,7 +74,7 @@ const reduceGraph = (graph, {type, ...data}) => {
         }),
       };
     case 'REMOVE_LINK':
-      console.log(data);
+      // console.log(data);
       return {
         nodes: graph.nodes,
         links: graph.links.filter(({source, target}) => {
@@ -123,7 +123,7 @@ const useGraph = () => {
       // }
 
       const {id, allChannels} = dhtClient;
-      console.log(allChannels);
+      // console.log(allChannels);
 
       const source = arrayBufferToHex(id);
       dispatchGraphAction({
@@ -241,7 +241,7 @@ const App = () => {
   const [graph, {addNodes, deleteNodes}] = useGraph();
   const handleNodeClick = useNodePinger();
 
-  console.log(graph);
+  // console.log(graph);
 
   // useEffect(() => {
   //   let n = 1;
@@ -259,7 +259,6 @@ const App = () => {
       <div className="graph-buttons">
         <button onClick={() => addNodes(1)}>add 1 peer</button>
         <button onClick={() => addNodes(5)}>add 5 peers</button>
-        <button onClick={() => addNodes(10)}>add 10 peers</button>
         <button onClick={() => deleteNodes(1)}>delete 1 peer</button>
         <button onClick={() => deleteNodes(5)}>delete 5 peers</button>
       </div>

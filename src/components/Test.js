@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
-import {Server, ConnManager} from './loopback';
-import {Client} from './client';
-import {ChunkedReadStream, ChunkedWriteStreamInjector} from './chunkedStream';
+import {Server, ConnManager} from '../loopback';
+import {Client} from '../client';
+import {ChunkedReadStream, ChunkedWriteStreamInjector} from '../chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
 
 import './App.scss';

@@ -82,7 +82,7 @@ body {
   margin-left: -350px;
   height: calc(100vh + 700px);
   width: calc(100vw + 700px);
-  background-image: url("/noise.png");
+  background-image: url("./noise.png");
   animation: idle-jitter 500ms infinite
 }
 

@@ -709,7 +709,7 @@ export class Scheduler {
     // TODO: how to pick this... maybe remote discard window size?
     // const startBin = this.loadedChunks.max();
     // const startBin = this.loadedChunks.max() - 32;
-    const startBin = this.lastCompletedBin;
+    const startBin = this.lastCompletedBin - 32;
 
     // bail if no chunks have been loaded yet
     if (!isFinite(startBin)) {

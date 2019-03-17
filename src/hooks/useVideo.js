@@ -1,79 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react';
-import muxjs from 'mux.js';
-import {ChunkedFragmentedReadStream} from './chunkedStream';
-import DiagnosticMenu from './DiagnosticMenu';
-import {Buffer} from 'buffer';
-import PlayButton from './PlayButton';
-import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
-import {faSyncAlt} from '@fortawesome/free-solid-svg-icons';
-
-import './SwarmPlayer.scss';
-
-const useSwarmMediaSource = swarm => {
-  const [mediaSource] = useState(() => {
-    const mediaSource = new MediaSource();
-    mediaSource.addEventListener('sourceopen', handleSourceOpen);
-    return mediaSource;
-  }, []);
-
-  function handleSourceOpen() {
-    const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="mp4a.40.5,avc1.64001F"');
-    // sourceBuffer.addEventListener('updatestart', e => console.log(e));
-    // sourceBuffer.addEventListener('updateend', e => console.log(e));
-    sourceBuffer.addEventListener('error', e => console.log(e));
-
-    const videoSegments = [];
-    const appendBuffer = newSegment => {
-      if (newSegment !== undefined && (videoSegments.length !== 0 || sourceBuffer.updating)) {
-        videoSegments.push(newSegment);
-        return;
-      }
-
-      if (sourceBuffer.updating) {
-        return;
-      }
-
-      const segment = newSegment || videoSegments.shift();
-      if (segment === undefined) {
-        return;
-      }
-
-      try {
-        sourceBuffer.appendBuffer(segment);
-      } catch (e) {
-        videoSegments.unshift(segment);
-        setImmediate(appendBuffer);
-      }
-    };
-
-    sourceBuffer.addEventListener('updateend', () => appendBuffer());
-
-    const transmuxer = new muxjs.mp4.Transmuxer();
-    let initSet = false;
-    transmuxer.on('data', event => {
-      if (event.type === 'combined') {
-        const buf = initSet
-          ? event.data
-          : Buffer.concat([Buffer.from(event.initSegment), Buffer.from(event.data)]);
-        initSet = true;
-
-        appendBuffer(buf);
-      } else {
-        console.log('unhandled event', event.type);
-      }
-    });
-
-    const stream = new ChunkedFragmentedReadStream(swarm);
-    stream.on('start', data => transmuxer.push(data));
-    stream.on('data', data => transmuxer.push(data));
-    stream.on('end', data => {
-      transmuxer.push(data);
-      transmuxer.flush();
-    });
-  }
-
-  return mediaSource;
-};
+import {useEffect, useRef, useState} from 'react';
 
 export const VideoReadyState = {
   // No information is available about the media resource.
@@ -101,6 +26,7 @@ const useVideo = () => {
   const [waiting, setWaiting] = useState(true);
   const [muted, setMuted] = useState(null);
   const [volume, setVolume] = useState(null);
+  const [savedVolume, setSavedVolume] = useState(null);
   const [readyState, setReadyState] = useState(0);
 
   useEffect(() => {
@@ -112,6 +38,8 @@ const useVideo = () => {
     setVolume(ref.current.volume);
     setPaused(ref.current.paused);
     setReadyState(ref.current.readyState);
+
+    console.log(ref);
 
     ref.current.addEventListener('audioprocess', e => console.log(new Date().toUTCString(), 'audioprocess', e));
     ref.current.addEventListener('canplay', e => console.log(new Date().toUTCString(), 'canplay', e));
@@ -207,6 +135,15 @@ const useVideo = () => {
     }
   };
 
+  const mute = () => {
+    setSavedVolume(ref.current.volume);
+    ref.current.volume = 0;
+  };
+
+  const unmute = () => {
+    ref.current.volume = savedVolume || 0.5;
+  };
+
   return [
     {
       readyState,
@@ -234,50 +171,12 @@ const useVideo = () => {
     },
     {
       play,
+      pause: () => ref.current && ref.current.pause(),
+      setVolume: volume => ref.current && (ref.current.volume = volume),
+      mute,
+      unmute,
     },
   ];
 };
 
-const SwarmPlayer = ({swarm, indexSwarm}) =>{
-  const [videoState, videoProps, videoControls] = useVideo();
-  const mediaSource = useSwarmMediaSource(swarm);
-
-  useEffect(() => {
-    if (videoProps.ref.current != null && mediaSource != null) {
-      videoProps.ref.current.src = URL.createObjectURL(mediaSource);
-      videoControls.play();
-    }
-  }, [videoProps.ref, mediaSource]);
-
-  console.log(videoState);
-
-  const playButton = (videoState.waiting && videoState.loaded) ? (
-    <div className="swarm_player__waiting_spinner">
-      <FontAwesomeIcon icon={faSyncAlt} />
-    </div>
-  ) : (
-    <PlayButton
-      visible={!videoState.playing}
-      onClick={videoControls.play}
-      flicker={videoState.ended && !videoState.loaded}
-      spin={videoState.waiting && videoState.loaded}
-      disabled={videoState.waiting || !videoState.loaded}
-      blur={true}
-    />
-  );
-
-  return (
-    <React.Fragment>
-      {/* <DiagnosticMenu swarm={indexSwarm} containerClass="diagnostic-menu--indent-1" /> */}
-      <DiagnosticMenu swarm={swarm} />
-      <video
-        onClick={e => e.preventDefault()}
-        className="swarm_player__video"
-        {...videoProps}
-      />
-      {playButton}
-    </React.Fragment>
-  );
-};
-
-export default SwarmPlayer;
+export default useVideo;
