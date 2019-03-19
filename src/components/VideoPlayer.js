@@ -1,16 +1,22 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useRef} from 'react';
 import DiagnosticMenu from './DiagnosticMenu';
-import PlayButton from './PlayButton';
+import LogoButton from './LogoButton';
 import useSwarmMediaSource from '../hooks/useSwarmMediaSource';
 import useVideo from '../hooks/useVideo';
-import {useDebounce} from 'react-use';
 import useFullscreen from 'use-fullscreen';
 import {Loop} from '@material-ui/icons';
 import VideoControls from './VideoControls';
+import useIdleTimeout from '../hooks/useIdleTimeout';
 
 import './VideoPlayer.scss';
 
-const SwarmPlayer = ({swarm, indexSwarm}) => {
+const SwarmPlayer = ({
+  swarm,
+  volumeStepSize = 0.1,
+}) => {
+  const rootRef = useRef();
+  const [controlsHidden, renewControlsTimeout, clearControlsTimeout] = useIdleTimeout();
+  const [isFullscreen, toggleFullscreen] = useFullscreen();
   const [videoState, videoProps, videoControls] = useVideo();
   const mediaSource = useSwarmMediaSource(swarm);
 
@@ -21,56 +27,53 @@ const SwarmPlayer = ({swarm, indexSwarm}) => {
     }
   }, [videoProps.ref, mediaSource]);
 
-  const [controlsVisible, setControlsVisible] = useState(false);
-  const [lastActive, setLastActive] = useState(false);
 
-  useDebounce(() => setControlsVisible(false), 5000, [lastActive]);
+  const waitingSpinner = (videoState.waiting && videoState.loaded)
+    ? (
+      <div className="video_player__waiting_spinner">
+        <Loop />
+      </div>
+    ) : (
+      <LogoButton
+        visible={!videoState.playing}
+        onClick={videoControls.play}
+        flicker={videoState.ended && !videoState.loaded}
+        spin={videoState.waiting && videoState.loaded}
+        disabled={videoState.waiting || !videoState.loaded}
+        blur={true}
+      />
+    );
 
-  const handleMouseMove = () => {
-    setControlsVisible(true);
-    setLastActive(Date.now());
+  const handleToggleFullscreen = () => toggleFullscreen(rootRef.current);
+
+  const handleWheel = e => {
+    const direction = e.deltaY < 0 ? 1 : -1;
+    videoControls.setVolume(videoState.volume + direction * volumeStepSize);
+    renewControlsTimeout();
   };
-
-  const handleMouseOut = () => setControlsVisible(false);
-
-  const ref = useRef();
-  const [isFullscreen, toggleFullscreen] = useFullscreen();
-
-  const playButton = (videoState.waiting && videoState.loaded) ? (
-    <div className="swarm_player__waiting_spinner">
-      <Loop />
-    </div>
-  ) : (
-    <PlayButton
-      visible={!videoState.playing}
-      onClick={videoControls.play}
-      flicker={videoState.ended && !videoState.loaded}
-      spin={videoState.waiting && videoState.loaded}
-      disabled={videoState.waiting || !videoState.loaded}
-      blur={true}
-    />
-  );
 
   return (
     <div
-      onMouseMove={handleMouseMove}
-      onMouseOut={handleMouseOut}
-      ref={ref}
+      className="video_player"
+      onMouseMove={renewControlsTimeout}
+      onMouseOut={clearControlsTimeout}
+      onDoubleClick={handleToggleFullscreen}
+      onWheel={handleWheel}
+      ref={rootRef}
     >
-      {/* <DiagnosticMenu swarm={indexSwarm} containerClass="diagnostic-menu--indent-1" /> */}
       <DiagnosticMenu swarm={swarm} />
       <video
         onClick={e => e.preventDefault()}
-        className="swarm_player__video"
+        className="video_player__video"
         {...videoProps}
       />
-      {playButton}
+      {waitingSpinner}
       <VideoControls
-        {...videoState}
-        {...videoControls}
-        visible={controlsVisible}
+        videoState={videoState}
+        videoControls={videoControls}
+        visible={!controlsHidden}
         fullscreen={isFullscreen}
-        toggleFullscreen={() => toggleFullscreen(ref.current)}
+        toggleFullscreen={handleToggleFullscreen}
       />
     </div>
   );

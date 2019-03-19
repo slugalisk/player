@@ -1,19 +1,19 @@
 import React, {Suspense, lazy} from 'react';
 import {HashRouter, Redirect, Route, Switch} from 'react-router-dom';
 import App from './App';
-import PlayButton from './PlayButton';
+import LogoButton from './LogoButton';
 
-const Test = lazy(() => import('./Test'));
+const LocalSwarm = lazy(() => import('./LocalSwarm'));
 const DhtGraph = lazy(() => import('./DhtGraph'));
 
-console.log({App, Test, DhtGraph});
+console.log({App, LocalSwarm, DhtGraph});
 
 const Router = () => (
   <HashRouter>
-    <Suspense fallback={<PlayButton disabled={true} flicker={true} blur />}>
+    <Suspense fallback={<LogoButton disabled={true} flicker={true} blur />}>
       <Switch>
-        <Route exact path="/test" component={props => <Test {...props} />} />
-        <Route exact path="/dht-graph" component={props => <DhtGraph {...props} />} />
+        <Route exact path="/test/local-swarm" component={props => <LocalSwarm {...props} />} />
+        <Route exact path="/test/dht-graph" component={props => <DhtGraph {...props} />} />
         <Route exact path="/:name([\w\-]*)" component={App} />
         <Redirect to="/" />
       </Switch>

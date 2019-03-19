@@ -297,7 +297,7 @@ export class SchedulerChunkRequestMap {
 
     for (let i = address.start; i <= address.end; i += 2) {
       const value = {
-        address: new Address(i, [i, i]),
+        address: Address.fromBase(i),
         createdAt: now,
         next: undefined,
         prev: undefined,
@@ -605,7 +605,7 @@ export class Scheduler {
     const priorityBinThreshold = this.lastCompletedBin + this.priorityBinThreshold;
 
     for (let i = startBin; i < endBin && requestAddresses.length < cwnd; i += 2) {
-      const address = new Address(i, [i, i]);
+      const address = Address.fromBase(i);
       if (!this.loadedChunks.get(address)
         && !this.requestedChunks.get(address)
         && availableChunks.get(address)) {
@@ -789,7 +789,7 @@ export class Scheduler {
     this.chunkRate.update(address);
     this.loadedChunks.set(address);
 
-    for (let i = this.lastCompletedBin; this.loadedChunks.get(new Address(i, [i, i])); i += 2) {
+    for (let i = this.lastCompletedBin; this.loadedChunks.get(Address.fromBase(i)); i += 2) {
       this.lastCompletedBin = i;
     }
 
@@ -816,7 +816,7 @@ export class Scheduler {
   // mark an address available from a peer (HAVE)
   markChunkAvailable(peer, address) {
     for (let i = address.start; i <= address.end; i += 2) {
-      const address = new Address(i, [i, i]);
+      const address = Address.fromBase(i);
 
       // this.binQueue.push(address);
       // this.scarcityMap.update(address, 1);
@@ -865,7 +865,7 @@ export class Scheduler {
 
     for (let i = address.start; i <= address.end; i += 2) {
       this.totalRequestsReceived ++;
-      peerState.requestQueue.push(new Address(i, [i, i]));
+      peerState.requestQueue.push(Address.fromBase(i));
     }
 
     peerState.requestedChunks.insert(address);

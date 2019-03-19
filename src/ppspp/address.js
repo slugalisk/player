@@ -31,6 +31,10 @@ export default class Address {
     }
   }
 
+  static fromBase(bin) {
+    return new Address(bin, [bin, bin]);
+  }
+
   static binBounds(bin) {
     return [
       bin & (bin + 1),

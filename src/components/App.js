@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import URI from '../ppspp/uri';
 import {Client} from '../client';
 import {ConnManager} from '../wrtc';
-import PlayButton from './PlayButton';
+import LogoButton from './LogoButton';
 import {useTimeout, useAsync} from 'react-use';
 import useQuery from '../hooks/useQuery';
 import VideoPlayer from './VideoPlayer';
@@ -71,7 +71,7 @@ const App = ({
       <div className="idle">
         <div className="noise"></div>
       </div>
-      <PlayButton
+      <LogoButton
         disabled={clientLoading || autoPlay || error}
         onClick={() => joinSwarm(swarmDesc.uri)}
         pulse={!clientLoading && !autoPlay}

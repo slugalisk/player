@@ -1,9 +1,9 @@
-.swarm_player__video {
+.video_player__video {
   height: 100vh;
   width: 100vw;
 }
 
-.swarm_player__waiting_spinner {
+.video_player__waiting_spinner {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -29,10 +29,10 @@
   }
 }
 
-.swarm_player__controls {
+.video_player__controls {
   position: absolute;
   bottom: 0;
-  height: 40px;
+  height: 50px;
   width: 100%;
   display: flex;
   justify-content: space-between;
@@ -40,14 +40,23 @@
   background: rgba(0, 0, 0, 0.8);
   transition: 400ms opacity ease-in-out;
 
+  >div {
+    flex-grow: 0;
+  }
+
+  .progress_bar {
+    flex-grow: 1;
+  }
+
   &.visible {
     opacity: 1;
   }
 
-  .swarm_player__controls__group {
+  .controls_group {
     display: flex;
   }
 
+  .pip,
   .play,
   .settings,
   .fullscreen {
@@ -61,13 +70,31 @@
     width: 200px;
     display: flex;
     justify-content: space-between;
+
+    .volume-level-1 {
+      transform: translateX(-16.65%);
+    }
+    .volume-level-2 {
+      transform: translateX(-8.35%);
+    }
   }
 
+  .pip,
   .play,
   .settings,
   .fullscreen,
   .volume {
     padding: 10px;
+
+    button, svg {
+      background: none;
+      margin: 0;
+      padding: 0;
+      border: none;
+      height: 30px;
+      width: 30px;
+      outline: none;
+    }
 
     svg {
       cursor: pointer;
@@ -75,38 +102,95 @@
     }
   }
 
+  .pip svg {
+    width: 23px;
+  }
+
   .video_volume__slider {
     width: 150px;
     position: relative;
-    margin: 9px 10px;
+    margin: 12px 10px 0 20px;
     opacity: 0;
     transition: 400ms opacity ease-in-out;
   }
 
   .volume:hover .video_volume__slider,
-  .video_volume__slider.dragging {
+  .video_volume__slider.dragging,
+  .video_volume__slider.active {
     opacity: 1;
   }
 
   .video_volume__rail {
     position: absolute;
     width: 100%;
-    height: 8px;
-    border-radius: 8px;
+    height: 6px;
+    border-radius: 6px;
     cursor: pointer;
-    background-color: #bbb;
+    background-color: #444;
   }
 
   .video_volume__track {
     position: absolute;
-    height: 8px;
+    height: 6px;
     z-index: 1px;
     background-color: #eee;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
   }
 
   .video_volume__handle {
+    position: absolute;
+    margin-left: -11px;
+    margin-top: -6px;
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 1px 1px 1px 1px rgba(100, 100, 100, 0.2);
+    background-color: #fff;
+  }
+
+  .video_progress_bar__slider {
+    width: calc(100% - 40px);
+    position: relative;
+    margin: 22px 10px 0 20px;
+    opacity: 0;
+    transition: 400ms opacity ease-in-out;
+  }
+
+  .progress_bar:hover .video_progress_bar__slider,
+  .video_progress_bar__slider.dragging {
+    opacity: 1;
+  }
+
+  .video_progress_bar__rail {
+    position: absolute;
+    width: 100%;
+    height: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #444;
+  }
+
+  .video_progress_bar__rail__buffer {
+    width: 100%;
+    height: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #ccc;
+  }
+
+  .video_progress_bar__track {
+    position: absolute;
+    height: 6px;
+    z-index: 1px;
+    background-color: #eee;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .video_progress_bar__handle {
     position: absolute;
     margin-left: -11px;
     margin-top: -6px;

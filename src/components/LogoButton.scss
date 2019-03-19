@@ -1,4 +1,4 @@
-.play_button {
+.logo_button {
   width: 200px;
   height: 200px;
   transition: 200ms filter ease-in-out, 300ms opacity ease-in-out;
@@ -98,7 +98,7 @@
   }
 }
 
-.play_button_wrap {
+.logo_button_wrap {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -109,7 +109,7 @@
   }
 }
 
-.play_button_wrap.hovering {
+.logo_button_wrap.hovering {
   &.disabled {
     animation: shake-no 2s linear 1;
   }

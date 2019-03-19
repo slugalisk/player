@@ -6,7 +6,7 @@ import DiagnosticMenu from './DiagnosticMenu';
 
 import './App.scss';
 
-const App = () => {
+const LocalSwarm = () => {
   const [server] = useState(new Server());
   const [swarms, setSwarms] = useState([]);
   const [swarmUri, setSwarmUri] = useState('');
@@ -58,4 +58,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default LocalSwarm;

@@ -1,6 +1,7 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {Slider, Rail, Handles, Tracks} from 'react-compound-slider';
 import classNames from 'classnames';
+import useIdleTimeout from '../hooks/useIdleTimeout';
 
 export const Handle = ({
   domain: [min, max],
@@ -32,13 +33,35 @@ export const Track = ({source, target, getTrackProps}) => (
 const VideoVolume = ({
   value,
   onUpdate,
+  onSlideStart,
+  onSlideEnd,
 }) => {
   const [dragging, setDragging] = useState(false);
+  const [idle, renewIdleTimeout] = useIdleTimeout();
+
+  useEffect(renewIdleTimeout, [value]);
 
   const sliderClassNames = classNames({
     video_volume__slider: true,
     dragging,
+    active: !idle,
   });
+
+  const handleUpdate = values => {
+    if (dragging) {
+      onUpdate(values[0]);
+    }
+  };
+
+  const handleSlideStart = values => {
+    onSlideStart(values);
+    setDragging(true);
+  };
+
+  const handleSlideEnd = values => {
+    onSlideEnd(values);
+    setDragging(false);
+  };
 
   return (
     <Slider
@@ -46,9 +69,9 @@ const VideoVolume = ({
       step={0.01}
       className={sliderClassNames}
       domain={[0, 1]}
-      onUpdate={onUpdate}
-      onSlideStart={() => setDragging(true)}
-      onSlideEnd={() => setDragging(false)}
+      onUpdate={handleUpdate}
+      onSlideStart={handleSlideStart}
+      onSlideEnd={handleSlideEnd}
       values={[value]}
     >
       <Rail>

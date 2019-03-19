@@ -3,9 +3,9 @@ import classNames from 'classnames';
 import {useHover} from 'use-events';
 import {useDebounce} from 'react-use';
 
-import './PlayButton.scss';
+import './LogoButton.scss';
 
-const PlayButton = ({
+const LogoButton = ({
   spin = false,
   flicker = false,
   pulse = false,
@@ -36,14 +36,14 @@ const PlayButton = ({
   const hidden = !visible && !currentVisibility;
 
   const hoverClasses = classNames({
-    play_button_wrap: true,
+    logo_button_wrap: true,
     hovering: mouseIdle,
     hidden,
     disabled,
   });
 
   const buttonClasses = classNames({
-    play_button: true,
+    logo_button: true,
     clickable: onClick != null && !disabled,
     exiting: !visible && currentVisibility,
     hidden,
@@ -81,4 +81,4 @@ const PlayButton = ({
   );
 };
 
-export default PlayButton;
+export default LogoButton;

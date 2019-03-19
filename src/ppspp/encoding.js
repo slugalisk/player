@@ -413,7 +413,7 @@ export const createEncoding = (ChunkAddress, IntegrityHash, LiveSignature) => {
     }
 
     byteLength() {
-      return this.address.byteLength() + this.data.length + 8;
+      return this.address.byteLength() + this.timestamp.byteLength() + this.data.length;
     }
 
     write(buffer, offset) {

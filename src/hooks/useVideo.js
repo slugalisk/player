@@ -25,9 +25,15 @@ const useVideo = () => {
   const [ended, setEnded] = useState(true);
   const [waiting, setWaiting] = useState(true);
   const [muted, setMuted] = useState(null);
-  const [volume, setVolume] = useState(null);
+  const [volume, unsafelySetVolume] = useState(null);
   const [savedVolume, setSavedVolume] = useState(null);
   const [readyState, setReadyState] = useState(0);
+  const [bufferStart, setBufferStart] = useState(0);
+  const [bufferEnd, setBufferEnd] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, unsafelySetCurrentTime] = useState(0);
+  const [seekableStart, setSeekableStart] = useState(0);
+  const [seekableEnd, setSeekableEnd] = useState(0);
 
   useEffect(() => {
     if (ref.current == null) {
@@ -115,12 +121,21 @@ const useVideo = () => {
     setReadyState(ref.current.readyState);
   };
 
-  // const onTimeUpdate = () => {
-  //   console.log({
-  //     buffered: ref.current.buffered,
-  //     seekable: ref.current.seekable,
-  //   });
-  // };
+  const onTimeUpdate = () => {
+    const video = ref.current;
+    if (video == null) {
+      return;
+    }
+
+    const bufferEnd = video.buffered.end(video.buffered.length - 1);
+
+    setBufferStart(video.buffered.start(0));
+    setBufferEnd(bufferEnd);
+    setDuration(video.duration);
+    unsafelySetCurrentTime(video.currentTime);
+    setSeekableStart(video.seekable.start(0));
+    setSeekableEnd(video.seekable.end(0));
+  };
 
   const play = async () => {
     try {
@@ -144,6 +159,38 @@ const useVideo = () => {
     ref.current.volume = savedVolume || 0.5;
   };
 
+  const setVolume = volume => {
+    if (ref.current) {
+      const clampedVolume = Math.max(0, Math.min(1, volume));
+      unsafelySetVolume(clampedVolume);
+      ref.current.volume = clampedVolume;
+    }
+  };
+
+  const setCurrentTime = time => {
+    if (!ref.current) {
+      return;
+    }
+
+    ref.current.currentTime = time;
+    unsafelySetCurrentTime(time);
+  };
+
+  const supportPiP = document.pictureInPictureEnabled && (ref.current && !ref.current.disablePictureInPicture);
+  const pip = ref.current ===document.pictureInPictureElement;
+
+  const togglePiP = async () => {
+    try {
+      if (pip) {
+        await document.exitPictureInPicture();
+      } else {
+        await ref.current.requestPictureInPicture();
+      }
+    } catch (e) {
+      console.warn('error opening pip', e);
+    }
+  };
+
   return [
     {
       readyState,
@@ -154,6 +201,14 @@ const useVideo = () => {
       waiting,
       muted,
       volume,
+      bufferStart,
+      bufferEnd,
+      duration,
+      currentTime,
+      seekableStart,
+      seekableEnd,
+      supportPiP,
+      pip,
     },
     {
       ref,
@@ -167,14 +222,16 @@ const useVideo = () => {
       onDurationChange,
       onLoadedMetadata,
       onLoadedData,
-      // onTimeUpdate,
+      onTimeUpdate,
     },
     {
-      play,
-      pause: () => ref.current && ref.current.pause(),
-      setVolume: volume => ref.current && (ref.current.volume = volume),
       mute,
       unmute,
+      pause: () => ref.current && ref.current.pause(),
+      play,
+      setCurrentTime,
+      setVolume,
+      togglePiP,
     },
   ];
 };
