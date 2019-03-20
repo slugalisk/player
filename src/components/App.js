@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import URI from '../ppspp/uri';
 import {Client} from '../client';
 import {ConnManager} from '../wrtc';
@@ -6,6 +6,7 @@ import LogoButton from './LogoButton';
 import {useTimeout, useAsync} from 'react-use';
 import useQuery from '../hooks/useQuery';
 import VideoPlayer from './VideoPlayer';
+import useReady from '../hooks/useReady';
 
 import './App.scss';
 
@@ -48,10 +49,8 @@ const App = ({
   const swarmDesc = client?.bootstrap.swarms.find(desc => desc.name === swarmName);
   const error = clientError || (autoPlay && clientTimeout) || !(clientLoading || swarmDesc);
 
-  useEffect(() => {
-    if (autoPlay && swarmDesc) {
-      setImmediate(() => joinSwarm(swarmDesc.uri));
-    }
+  useReady(() => {
+    setImmediate(() => joinSwarm(swarmDesc.uri));
   }, [autoPlay, swarmDesc]);
 
   if (swarm) {

@@ -2,47 +2,56 @@ import {useState} from 'react';
 import muxjs from 'mux.js';
 import {ChunkedFragmentedReadStream} from '../chunkedStream';
 import {Buffer} from 'buffer';
+import useReady from './useReady';
+
+const MIME_TYPE = 'video/mp4; codecs="mp4a.40.5,avc1.64001F"';
 
 const useSwarmMediaSource = swarm => {
+  const [sourceBuffer, setSourceBuffer] = useState(null);
+
+  const [operations] = useState([]);
+
+  const transformBuffer = newOperation => {
+    const readOnly = sourceBuffer === null || sourceBuffer.updating;
+
+    if (newOperation !== undefined && (operations.length !== 0 || readOnly)) {
+      operations.push(newOperation);
+      setImmediate(transformBuffer);
+      return;
+    }
+
+    if (readOnly) {
+      return;
+    }
+
+    const operation = newOperation || operations.shift();
+    if (operation === undefined) {
+      return;
+    }
+
+    try {
+      operation(sourceBuffer);
+    } catch (e) {
+      operations.unshift(operation);
+      setImmediate(transformBuffer);
+    }
+  };
+
   const [mediaSource] = useState(() => {
     const mediaSource = new MediaSource();
+
+    const handleSourceOpen = () => setSourceBuffer(mediaSource.addSourceBuffer(MIME_TYPE));
     mediaSource.addEventListener('sourceopen', handleSourceOpen);
+
     return mediaSource;
   }, []);
 
-  function handleSourceOpen() {
-    const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="mp4a.40.5,avc1.64001F"');
-    // sourceBuffer.addEventListener('updatestart', e => console.log(e));
-    // sourceBuffer.addEventListener('updateend', e => console.log(e));
+  useReady(() => {
     sourceBuffer.addEventListener('error', e => console.log(e));
-
-    const videoSegments = [];
-    const appendBuffer = newSegment => {
-      if (newSegment !== undefined && (videoSegments.length !== 0 || sourceBuffer.updating)) {
-        videoSegments.push(newSegment);
-        return;
-      }
-
-      if (sourceBuffer.updating) {
-        return;
-      }
-
-      const segment = newSegment || videoSegments.shift();
-      if (segment === undefined) {
-        return;
-      }
-
-      try {
-        sourceBuffer.appendBuffer(segment);
-      } catch (e) {
-        videoSegments.unshift(segment);
-        setImmediate(appendBuffer);
-      }
-    };
-
-    sourceBuffer.addEventListener('updateend', () => appendBuffer());
+    sourceBuffer.addEventListener('updateend', () => transformBuffer());
 
     const transmuxer = new muxjs.mp4.Transmuxer();
+
     let initSet = false;
     transmuxer.on('data', event => {
       if (event.type === 'combined') {
@@ -51,9 +60,9 @@ const useSwarmMediaSource = swarm => {
           : Buffer.concat([Buffer.from(event.initSegment), Buffer.from(event.data)]);
         initSet = true;
 
-        appendBuffer(buf);
+        transformBuffer(sourceBuffer => sourceBuffer.appendBuffer(buf));
       } else {
-        console.log('unhandled event', event.type);
+        console.warn('unhandled event', event.type);
       }
     });
 
@@ -64,9 +73,17 @@ const useSwarmMediaSource = swarm => {
       transmuxer.push(data);
       transmuxer.flush();
     });
-  }
+  }, [sourceBuffer]);
 
-  return mediaSource;
+  const truncate = duration => transformBuffer(sourceBuffer => {
+    const buffered = sourceBuffer?.buffered;
+    if (buffered?.length && buffered.end(0) > duration) {
+      const offset = buffered.end(0) - duration;
+      sourceBuffer.remove(0, offset);
+    }
+  });
+
+  return [mediaSource, truncate];
 };
 
 export default useSwarmMediaSource;

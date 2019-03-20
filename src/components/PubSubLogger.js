@@ -1,13 +1,12 @@
-import React, {useEffect} from 'react';
+import React from 'react';
 import {PubSubConsumer} from '../pubsub';
 import DiagnosticMenu from './DiagnosticMenu';
+import useReady from '../hooks/useReady';
 
 const PubSubLogger = ({indexSwarm, swarm}) => {
-  useEffect(() => {
-    if (swarm) {
-      const consumer = new PubSubConsumer(swarm);
-      consumer.on('message', message => console.log(message));
-    }
+  useReady(() => {
+    const consumer = new PubSubConsumer(swarm);
+    consumer.on('message', message => console.log(message));
   }, [swarm]);
 
   return (

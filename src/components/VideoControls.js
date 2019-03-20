@@ -14,22 +14,21 @@ import {
 } from '@material-ui/icons';
 import ReactTooltip from 'react-tooltip';
 import VideoProgressBar from './VideoProgressBar';
+import {useDebounce} from 'react-use';
 
 import './VideoPlayer.scss';
 
 const Tooltips = () => (
   <ReactTooltip
-    id="controls-tooltips"
     place="top"
     effect="solid"
   />
 );
 
 const Button = ({className, tooltip, icon: Icon, onClick}) => (
-  <div className={className}>
+  <div className={classNames('button-wrap', className)}>
     <Tooltips />
     <button
-      data-for="controls-tooltips"
       data-tip={tooltip}
       onClick={onClick}
     >
@@ -56,30 +55,12 @@ const FullscreenButton = ({supported, enabled, toggle}) => !supported ? null : (
   />
 );
 
-const VideoControls = ({
-  fullscreen,
-  toggleFullscreen,
-  videoState,
+const VolumeControl = ({
+  volume,
   videoControls,
-  visible,
+  onUpdateStart,
+  onUpdateEnd,
 }) => {
-  const {
-    playing,
-    volume,
-    supportPiP,
-  } = videoState;
-
-  const {
-    setVolume,
-    play,
-    pause,
-    unmute,
-    mute,
-    togglePiP,
-  } = videoControls;
-
-  const [active, setActive] = useState(false);
-
   const volumeIcons = [
     VolumeOff,
     VolumeMute,
@@ -88,38 +69,73 @@ const VideoControls = ({
   ];
   const volumeLevel = Math.ceil(volume * (volumeIcons.length - 1));
   const VolumeIcon = volumeIcons[volumeLevel];
-  const handleVolumeClick = () => volume === 0 ? unmute() : mute();
+  const handleVolumeClick = () => volume === 0 ? videoControls.unmute() : videoControls.mute();
+
+  return (
+    <div className="volume button-wrap">
+      <Tooltips />
+      <button
+        data-tip={volume === 0 ? 'Unmute' : 'Mute'}
+        onClick={handleVolumeClick}
+      >
+        <VolumeIcon className={`volume-level-${volumeLevel}`} />
+      </button>
+      <VideoVolume
+        onUpdate={videoControls.setVolume}
+        onSlideStart={onUpdateStart}
+        onSlideEnd={onUpdateEnd}
+        value={volume}
+      />
+    </div>
+  );
+};
+
+const VideoControls = props => {
+  const [active, setActive] = useState(false);
+  const visible = props.visible || active;
+
+  const [visible100, setVisible100] = useState(false);
+  const [visible500, setVisible500] = useState(false);
+  useDebounce(() => setVisible100(visible), 100, [visible]);
+  useDebounce(() => setVisible500(visible), 500, [visible]);
+
+  if (!visible && !visible500) {
+    return null;
+  }
+
+  const {
+    videoState,
+    videoControls,
+  } = props;
+
+  const {playing} = videoState;
 
   const controlsClassName = classNames({
     video_player__controls: true,
-    visible: visible || active,
+    visible,
+    visible100,
+    visible500,
   });
 
   return (
-    <div className={controlsClassName}>
+    <div
+      className={controlsClassName}
+      onMouseMove={() => setActive(true)}
+      onMouseLeave={() => setActive(false)}
+    >
       <div className="controls_group">
         <Button
           className="play"
           tooltip={playing === 0 ? 'Pause' : 'Play'}
-          onClick={playing ? pause : play}
+          onClick={playing ? videoControls.pause : videoControls.play}
           icon={playing ? Pause : PlayArrow}
         />
-        <div className="volume">
-          <Tooltips />
-          <button
-            data-for="controls-tooltips"
-            data-tip={volume === 0 ? 'Unmute' : 'Mute'}
-            onClick={handleVolumeClick}
-          >
-            <VolumeIcon className={`volume-level-${volumeLevel}`} />
-          </button>
-          <VideoVolume
-            onUpdate={setVolume}
-            onSlideStart={() => setActive(true)}
-            onSlideEnd={() => setActive(false)}
-            value={volume}
-          />
-        </div>
+        <VolumeControl
+          volume={videoState.volume}
+          videoControls={videoControls}
+          onUpdateStart={() => setActive(true)}
+          onUpdateEnd={() => setActive(false)}
+        />
       </div>
       <div className="progress_bar">
         <VideoProgressBar
@@ -128,11 +144,14 @@ const VideoControls = ({
         />
       </div>
       <div className="controls_group">
-        <PiPButton supported={supportPiP} toggle={togglePiP} />
+        <PiPButton
+          supported={videoState.supportPiP}
+          toggle={videoControls.togglePiP}
+        />
         <FullscreenButton
           supported={document.fullscreenEnabled}
-          enabled={fullscreen}
-          toggle={toggleFullscreen}
+          enabled={props.fullscreen}
+          toggle={props.toggleFullscreen}
         />
       </div>
     </div>

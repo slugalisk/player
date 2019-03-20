@@ -6,8 +6,6 @@ import LogoButton from './LogoButton';
 const LocalSwarm = lazy(() => import('./LocalSwarm'));
 const DhtGraph = lazy(() => import('./DhtGraph'));
 
-console.log({App, LocalSwarm, DhtGraph});
-
 const Router = () => (
   <HashRouter>
     <Suspense fallback={<LogoButton disabled={true} flicker={true} blur />}>

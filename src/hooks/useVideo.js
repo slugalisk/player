@@ -1,4 +1,5 @@
-import {useEffect, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
+import useReady from './useReady';
 
 export const VideoReadyState = {
   // No information is available about the media resource.
@@ -35,40 +36,12 @@ const useVideo = () => {
   const [seekableStart, setSeekableStart] = useState(0);
   const [seekableEnd, setSeekableEnd] = useState(0);
 
-  useEffect(() => {
-    if (ref.current == null) {
-      return;
-    }
-
+  useReady(() => {
     setMuted(ref.current.muted);
     setVolume(ref.current.volume);
     setPaused(ref.current.paused);
     setReadyState(ref.current.readyState);
-
-    console.log(ref);
-
-    ref.current.addEventListener('audioprocess', e => console.log(new Date().toUTCString(), 'audioprocess', e));
-    ref.current.addEventListener('canplay', e => console.log(new Date().toUTCString(), 'canplay', e));
-    ref.current.addEventListener('canplaythrough', e => console.log(new Date().toUTCString(), 'canplaythrough', e));
-    ref.current.addEventListener('complete', e => console.log(new Date().toUTCString(), 'complete', e));
-    ref.current.addEventListener('durationchange', e => console.log(new Date().toUTCString(), 'durationchange', e));
-    ref.current.addEventListener('emptied', e => console.log(new Date().toUTCString(), 'emptied', e));
-    ref.current.addEventListener('ended', e => console.log(new Date().toUTCString(), 'ended', e));
-    ref.current.addEventListener('loadeddata', e => console.log(new Date().toUTCString(), 'loadeddata', e));
-    ref.current.addEventListener('loadedmetadata', e => console.log(new Date().toUTCString(), 'loadedmetadata', e));
-    ref.current.addEventListener('pause', e => console.log(new Date().toUTCString(), 'pause', e));
-    ref.current.addEventListener('play', e => console.log(new Date().toUTCString(), 'play', e));
-    ref.current.addEventListener('playing', e => console.log(new Date().toUTCString(), 'playing', e));
-    ref.current.addEventListener('ratechange', e => console.log(new Date().toUTCString(), 'ratechange', e));
-    ref.current.addEventListener('seeked', e => console.log(new Date().toUTCString(), 'seeked', e));
-    ref.current.addEventListener('seeking', e => console.log(new Date().toUTCString(), 'seeking', e));
-    ref.current.addEventListener('stalled', e => console.log(new Date().toUTCString(), 'stalled', e));
-    ref.current.addEventListener('suspend', e => console.log(new Date().toUTCString(), 'suspend', e));
-    // ref.current.addEventListener('timeupdate', e => console.log(new Date().toUTCString(), 'timeupdate', e));
-    ref.current.addEventListener('volumechange', e => console.log(new Date().toUTCString(), 'volumechange', e));
-    ref.current.addEventListener('waiting', e => console.log(new Date().toUTCString(), 'waiting', e));
-    ref.current.addEventListener('readystatechange', e => console.log(new Date().toUTCString(), 'readystatechange', e));
-  }, [ref]);
+  }, [ref.current]);
 
   const onEnded = () => {
     setPlaying(false);
@@ -123,18 +96,20 @@ const useVideo = () => {
 
   const onTimeUpdate = () => {
     const video = ref.current;
-    if (video == null) {
+    const {buffered, seekable} = video;
+
+    if (buffered.length === 0 || seekable.length === 0) {
       return;
     }
 
-    const bufferEnd = video.buffered.end(video.buffered.length - 1);
+    const bufferEnd = buffered.end(buffered.length - 1);
 
-    setBufferStart(video.buffered.start(0));
+    setBufferStart(buffered.start(0));
     setBufferEnd(bufferEnd);
     setDuration(video.duration);
     unsafelySetCurrentTime(video.currentTime);
-    setSeekableStart(video.seekable.start(0));
-    setSeekableEnd(video.seekable.end(0));
+    setSeekableStart(seekable.start(0));
+    setSeekableEnd(seekable.end(0));
   };
 
   const play = async () => {
@@ -191,6 +166,9 @@ const useVideo = () => {
     }
   };
 
+  const src = ref.current?.src;
+  const setSrc = src => (ref.current && src) && (ref.current.src = src);
+
   return [
     {
       readyState,
@@ -209,6 +187,7 @@ const useVideo = () => {
       seekableEnd,
       supportPiP,
       pip,
+      src,
     },
     {
       ref,
@@ -232,6 +211,7 @@ const useVideo = () => {
       setCurrentTime,
       setVolume,
       togglePiP,
+      setSrc,
     },
   ];
 };

@@ -18,15 +18,14 @@ const SwarmPlayer = ({
   const [controlsHidden, renewControlsTimeout, clearControlsTimeout] = useIdleTimeout();
   const [isFullscreen, toggleFullscreen] = useFullscreen();
   const [videoState, videoProps, videoControls] = useVideo();
-  const mediaSource = useSwarmMediaSource(swarm);
+  const [mediaSource, truncateMediaSource] = useSwarmMediaSource(swarm);
 
   useEffect(() => {
-    if (videoProps.ref.current != null && mediaSource != null) {
-      videoProps.ref.current.src = URL.createObjectURL(mediaSource);
-      videoControls.play();
-    }
+    videoControls.setSrc(URL.createObjectURL(mediaSource));
+    videoControls.play();
   }, [videoProps.ref, mediaSource]);
 
+  useEffect(() => truncateMediaSource(60), [videoState.bufferEnd]);
 
   const waitingSpinner = (videoState.waiting && videoState.loaded)
     ? (
@@ -35,7 +34,7 @@ const SwarmPlayer = ({
       </div>
     ) : (
       <LogoButton
-        visible={!videoState.playing}
+        visible={!videoState.playing && !videoState.paused}
         onClick={videoControls.play}
         flicker={videoState.ended && !videoState.loaded}
         spin={videoState.waiting && videoState.loaded}
@@ -56,7 +55,8 @@ const SwarmPlayer = ({
     <div
       className="video_player"
       onMouseMove={renewControlsTimeout}
-      onMouseOut={clearControlsTimeout}
+      onMouseLeave={clearControlsTimeout}
+      onClick={videoState.playing ? videoControls.pause : videoControls.play}
       onDoubleClick={handleToggleFullscreen}
       onWheel={handleWheel}
       ref={rootRef}

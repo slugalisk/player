@@ -1,13 +1,12 @@
-import React, {useEffect} from 'react';
+import React from 'react';
 import {ChunkedReadStream} from '../chunkedStream';
 import DiagnosticMenu from './DiagnosticMenu';
+import useReady from '../hooks/useReady';
 
 const NoiseLogger = ({swarm}) => {
-  useEffect(() => {
-    if (swarm) {
-      const stream = new ChunkedReadStream(swarm);
-      stream.on('data', ({length}) => console.log(`received ${length} bytes`));
-    }
+  useReady(() => {
+    const stream = new ChunkedReadStream(swarm);
+    stream.on('data', ({length}) => console.log(`received ${length} bytes`));
   }, [swarm]);
 
   return <DiagnosticMenu swarm={swarm} />;

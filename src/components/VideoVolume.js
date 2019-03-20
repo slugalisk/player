@@ -1,7 +1,8 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState} from 'react';
 import {Slider, Rail, Handles, Tracks} from 'react-compound-slider';
 import classNames from 'classnames';
 import useIdleTimeout from '../hooks/useIdleTimeout';
+import useUpdates from '../hooks/useUpdates';
 
 export const Handle = ({
   domain: [min, max],
@@ -39,7 +40,7 @@ const VideoVolume = ({
   const [dragging, setDragging] = useState(false);
   const [idle, renewIdleTimeout] = useIdleTimeout();
 
-  useEffect(renewIdleTimeout, [value]);
+  useUpdates(renewIdleTimeout, [value]);
 
   const sliderClassNames = classNames({
     video_volume__slider: true,

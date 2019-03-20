@@ -24,7 +24,7 @@ const LogoButton = ({
   }, [visible]);
 
   const [hovering, hoverEventHandlers] = useHover();
-  const [mouseIdle, setMouseIdle] = useState('');
+  const [mouseIdle, setMouseIdle] = useState(false);
 
   useDebounce(() => setMouseIdle(hovering), idleTimeout, [hovering]);
   useEffect(() => {

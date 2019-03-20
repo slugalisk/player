@@ -37,7 +37,7 @@
   display: flex;
   justify-content: space-between;
   opacity: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.2);
   transition: 400ms opacity ease-in-out;
 
   >div {
@@ -48,7 +48,7 @@
     flex-grow: 1;
   }
 
-  &.visible {
+  &.visible100 {
     opacity: 1;
   }
 
@@ -79,14 +79,12 @@
     }
   }
 
-  .pip,
-  .play,
-  .settings,
-  .fullscreen,
-  .volume {
+  .button-wrap {
     padding: 10px;
+    position: relative;
 
     button, svg {
+      position: relative;
       background: none;
       margin: 0;
       padding: 0;
@@ -94,6 +92,7 @@
       height: 30px;
       width: 30px;
       outline: none;
+      z-index: 2;
     }
 
     svg {
@@ -179,6 +178,7 @@
     border-radius: 6px;
     cursor: pointer;
     background: #ccc;
+    transition: 400ms width ease-in-out;
   }
 
   .video_progress_bar__track {
@@ -188,6 +188,7 @@
     background-color: #eee;
     border-radius: 6px;
     cursor: pointer;
+    transition: 400ms width ease-in-out;
   }
 
   .video_progress_bar__handle {
@@ -201,5 +202,21 @@
     border-radius: 50%;
     box-shadow: 1px 1px 1px 1px rgba(100, 100, 100, 0.2);
     background-color: #fff;
+    transition: 400ms left ease-in-out;
+  }
+
+  .video_progress_bar__slider.dragging {
+    .video_progress_bar__track,
+    .video_progress_bar__handle {
+      transition: none;
+    }
+  }
+
+  &.visible:not(.visible100) {
+    .video_progress_bar__rail__buffer,
+    .video_progress_bar__track,
+    .video_progress_bar__handle {
+      transition: none;
+    }
   }
 }

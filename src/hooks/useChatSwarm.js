@@ -1,16 +1,13 @@
-import {useEffect, useState} from 'react';
+import {useState} from 'react';
 import usePubSubSwarm from './usePubSubSwarm';
 import hexToUint8Array from '../hexToUint8Array';
+import useReady from '../hooks/useReady';
 
 const useChatSwarm = client => {
   const [consumer] = usePubSubSwarm(client, 'chat');
   const [messages, setMessages] = useState([]);
 
-  useEffect(() => {
-    if (consumer == null) {
-      return;
-    }
-
+  useReady(() => {
     const handleMessage = message => setMessages(prev => ([
       ...prev.slice(prev.length > 100 ? 1 : 0),
       message,

@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Slider, Rail, Handles, Tracks} from 'react-compound-slider';
 import classNames from 'classnames';
-import {useSpring} from 'react-use';
 
 export const Handle = ({
   domain: [min, max],
@@ -51,8 +50,7 @@ const VideoProgressBar = ({
   const [wasPlaying, setWasPlaying] = useState(false);
   const [value, setValue] = useState(0);
   const [domainStart, setDomainStart] = useState(0);
-  const [domainEndTarget, setDomainEndTarget] = useState(1);
-  const domainEnd = useSpring(domainEndTarget);
+  const [domainEnd, setDomainEnd] = useState(1);
 
   useEffect(() => {
     if (!dragging) {
@@ -60,12 +58,11 @@ const VideoProgressBar = ({
     }
   }, [dragging, currentTime]);
 
+  // TODO: domain end from bitrate and last announced chunk?
   useEffect(() => {
-    if (!dragging) {
-      setDomainStart(bufferStart);
-      setDomainEndTarget(Math.ceil(bufferEnd / 60 + 1) * 60);
-    }
-  }, [dragging, bufferStart, bufferEnd]);
+    setDomainStart(bufferStart);
+    setDomainEnd(bufferEnd);
+  }, [bufferStart, bufferEnd]);
 
   const sliderClassNames = classNames({
     video_progress_bar__slider: true,
@@ -75,14 +72,6 @@ const VideoProgressBar = ({
   const clampValue = value => Math.min(bufferEnd, value);
 
   const handleUpdate = ([newValue]) => {
-    const clampedValue = clampValue(newValue);
-    if (dragging && clampedValue !== value) {
-      setCurrentTime(clampedValue);
-      setValue(clampedValue);
-    }
-  };
-
-  const handleChange = ([newValue]) => {
     const clampedValue = clampValue(newValue);
     if (dragging && clampedValue !== value) {
       setCurrentTime(clampedValue);
@@ -119,7 +108,6 @@ const VideoProgressBar = ({
       className={sliderClassNames}
       domain={[domainStart, domainEnd]}
       onUpdate={handleUpdate}
-      onChange={handleChange}
       onSlideStart={handleSlideStart}
       onSlideEnd={handleSlideEnd}
       values={[value]}
