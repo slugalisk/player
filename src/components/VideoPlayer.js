@@ -13,12 +13,14 @@ import './VideoPlayer.scss';
 const SwarmPlayer = ({
   swarm,
   volumeStepSize = 0.1,
+  mimeType,
+  useMediaSource = useSwarmMediaSource,
 }) => {
   const rootRef = useRef();
   const [controlsHidden, renewControlsTimeout, clearControlsTimeout] = useIdleTimeout();
   const [isFullscreen, toggleFullscreen] = useFullscreen();
   const [videoState, videoProps, videoControls] = useVideo();
-  const [mediaSource, truncateMediaSource] = useSwarmMediaSource(swarm);
+  const [mediaSource, truncateMediaSource] = useMediaSource(swarm, {mimeType});
 
   useEffect(() => {
     videoControls.setSrc(URL.createObjectURL(mediaSource));
@@ -56,7 +58,6 @@ const SwarmPlayer = ({
       className="video_player"
       onMouseMove={renewControlsTimeout}
       onMouseLeave={clearControlsTimeout}
-      onClick={videoState.playing ? videoControls.pause : videoControls.play}
       onDoubleClick={handleToggleFullscreen}
       onWheel={handleWheel}
       ref={rootRef}

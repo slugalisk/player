@@ -13,7 +13,7 @@ import './App.scss';
 const NoiseLogger = React.lazy(() => import('./NoiseLogger'));
 const PubSubLogger = React.lazy(() => import('./PubSubLogger'));
 
-const getDefaultBootstrapAddress = () => {
+export const getDefaultBootstrapAddress = () => {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = process.env.NODE_ENV === 'development'
     ? window.location.hostname + ':8080'
@@ -21,7 +21,7 @@ const getDefaultBootstrapAddress = () => {
   return `${proto}://${host}`;
 };
 
-const useSwarm = ({ppsppClient} = {}) => {
+export const useSwarm = ({ppsppClient} = {}) => {
   const [swarm, setSwarm] = useState(null);
   const join = uri => setSwarm(ppsppClient.joinSwarm(URI.parse(uri)));
   return [swarm, join];
@@ -45,13 +45,16 @@ const App = ({
   } = useAsync(() =>  Client.create(new ConnManager(bootstrapAddress)), []);
 
   const [swarm, joinSwarm] = useSwarm(client);
+  const [swarmUriState, setSwarmUri] = useState('');
 
   const swarmDesc = client?.bootstrap.swarms.find(desc => desc.name === swarmName);
   const error = clientError || (autoPlay && clientTimeout) || !(clientLoading || swarmDesc);
 
   useReady(() => {
-    setImmediate(() => joinSwarm(swarmDesc.uri));
-  }, [autoPlay, swarmDesc]);
+    if (autoPlay) {
+      setImmediate(() => joinSwarm(swarmDesc.uri));
+    }
+  }, [autoPlay, swarmDesc?.uri]);
 
   if (swarm) {
     const Component = {
@@ -65,19 +68,38 @@ const App = ({
     );
   }
 
+  const logoButton = (
+    <LogoButton
+      disabled={clientLoading || autoPlay || error}
+      onClick={() => joinSwarm(swarmDesc?.uri)}
+      pulse={!clientLoading && !autoPlay}
+      flicker={clientLoading || autoPlay}
+      error={error}
+      blur
+    />
+  );
+
+  const handleUriChange = e => setSwarmUri(e.target.value);
+
+  const swarmUri = swarmUriState || swarmDesc?.uri || '';
+
+  const uriForm = (
+    <form className="join-form" onSubmit={() => joinSwarm(swarmUri)}>
+      <input
+        onChange={handleUriChange}
+        placeholder="Enter Swarm URI"
+        value={swarmUri}
+      />
+      <button>Join</button>
+    </form>
+  );
+
   return (
     <>
       <div className="idle">
-        <div className="noise"></div>
+        <div className="noise" />
+        {autoPlay ? logoButton : uriForm}
       </div>
-      <LogoButton
-        disabled={clientLoading || autoPlay || error}
-        onClick={() => joinSwarm(swarmDesc.uri)}
-        pulse={!clientLoading && !autoPlay}
-        flicker={clientLoading || autoPlay}
-        error={error}
-        blur
-      />
     </>
   );
 };

@@ -37,6 +37,7 @@
     "lodash.debounce": "^4.0.8",
     "lodash.invert": "^4.3.0",
     "lodash.once": "^4.1.1",
+    "mediastream-to-webm": "^1.0.1",
     "moment": "^2.24.0",
     "mux.js": "^5.0.0",
     "node-forge": "^0.7.6",

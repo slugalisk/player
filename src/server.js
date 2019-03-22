@@ -154,10 +154,10 @@ dhtClient.on('receive.chat.message', ({data}) => {
 
 nginxInjector.start();
 
-// noiseInjector.start({name: 'noise', bitRate: 3500000});
+noiseInjector.start({name: 'noise', bitRate: 3500000});
 noiseInjector.start({
   name: 'noise',
-  bitRate: 9000000,
+  bitRate: 3500000,
   chunkSize: 32 * 1024,
   chunksPerSignature: 16,
 });

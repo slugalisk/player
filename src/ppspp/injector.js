@@ -69,6 +69,7 @@ export default class Injector {
     ]).then(([subtree]) => {
       this.swarm.chunkBuffer.setRange(subtree.rootAddress, chunks);
       this.swarm.scheduler.markChunksLoaded(subtree.rootAddress);
+      this.swarm.emitNewData();
     });
   }
 

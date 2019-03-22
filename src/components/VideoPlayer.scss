@@ -219,4 +219,25 @@
       transition: none;
     }
   }
+
+  .controls_group {
+    .button-wrap button:hover::before {
+      background-color: rgba(0, 0, 0, 0.4);
+      border-radius: 4px;
+      color: white;
+      content: attr(data-tip);
+      padding: 5px;
+      position: absolute;
+      display: block;
+      top: -40px;
+      left: 0;
+      z-index: 5;
+      white-space: nowrap;
+    }
+
+    &.right button:hover::before {
+      left: auto;
+      right: 0;
+    }
+  }
 }

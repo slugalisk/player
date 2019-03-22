@@ -12,22 +12,13 @@ import {
   FullscreenExit,
   PictureInPictureAlt,
 } from '@material-ui/icons';
-import ReactTooltip from 'react-tooltip';
 import VideoProgressBar from './VideoProgressBar';
 import {useDebounce} from 'react-use';
 
 import './VideoPlayer.scss';
 
-const Tooltips = () => (
-  <ReactTooltip
-    place="top"
-    effect="solid"
-  />
-);
-
 const Button = ({className, tooltip, icon: Icon, onClick}) => (
   <div className={classNames('button-wrap', className)}>
-    <Tooltips />
     <button
       data-tip={tooltip}
       onClick={onClick}
@@ -73,7 +64,6 @@ const VolumeControl = ({
 
   return (
     <div className="volume button-wrap">
-      <Tooltips />
       <button
         data-tip={volume === 0 ? 'Unmute' : 'Mute'}
         onClick={handleVolumeClick}
@@ -123,7 +113,7 @@ const VideoControls = props => {
       onMouseMove={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
     >
-      <div className="controls_group">
+      <div className="controls_group left">
         <Button
           className="play"
           tooltip={playing === 0 ? 'Pause' : 'Play'}
@@ -143,7 +133,7 @@ const VideoControls = props => {
           videoControls={videoControls}
         />
       </div>
-      <div className="controls_group">
+      <div className="controls_group right">
         <PiPButton
           supported={videoState.supportPiP}
           toggle={videoControls.togglePiP}

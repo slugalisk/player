@@ -577,7 +577,7 @@ export class Scheduler {
       cancelledRequests.push(sentRequests.pop());
     }
 
-    if (cancelledRequests.length > 0) {
+    if (cancelledRequests.length !== 0) {
       this.totalCancelled += cancelledRequests.length;
       cancelledRequests.forEach(({address}) => {
         this.requestedChunks.set(address, false);
@@ -597,7 +597,7 @@ export class Scheduler {
       this.requestedChunks.values.offset * 2 + 2,
       availableChunks.min(),
       this.lastCompletedBin,
-    );
+    ) - 500;
     const endBin = Math.min(
       startBin + this.liveDiscardWindow * 2,
       availableChunks.max(),
@@ -831,6 +831,10 @@ export class Scheduler {
 
   // mark an address where chunks have been manually added ie. by an injector
   markChunksLoaded(address) {
+    if (this.lastExportedBin === -Infinity) {
+      this.lastExportedBin = address.start - 2;
+    }
+
     this.loadedChunks.set(address);
     this.lastCompletedBin = address.start;
 
