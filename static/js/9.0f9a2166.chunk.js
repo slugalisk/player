@@ -1,0 +1,2 @@
+((self||this).webpackJsonp=(self||this).webpackJsonp||[]).push([[9],{5732:function(e,n,t){"use strict";t.r(n);var a=t(0),c=t.n(a),r=t(132),s=t(131),o=t(59);n.default=function(e){var n=e.swarm;return Object(o.a)(function(){new r.b(n).on("data",function(e){var n=e.length;return console.log("received ".concat(n," bytes"))})},[n]),c.a.createElement(s.a,{swarm:n})}}}]);
+//# sourceMappingURL=9.0f9a2166.chunk.js.map
