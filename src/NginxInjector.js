@@ -92,7 +92,7 @@ export default class NginxInjector extends EventEmitter {
   }
 
   startNginx() {
-    this.nginx = spawn(path.join(__dirname, '/../vendor/nginx/objs/nginx'));
+    this.nginx = spawn(process.env.NGINX_PATH || 'nginx');
 
     this.nginx.stdout.on('data', (data) => {
       console.log(`ps log: ${data}`);

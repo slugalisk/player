@@ -1,0 +1,8 @@
+.vscode
+build
+media
+node_modules
+test
+vendor/nginx
+vendor/nginx-rtmp-module
+vendor/IP2LOCATION-LITE-DB5.BIN
